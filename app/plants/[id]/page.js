@@ -135,6 +135,13 @@ export default function PlantDetail() {
     load();
   }
 
+  async function handleMarkDead() {
+    if (!confirm(`確定要將「${plant.name}」標記為死亡嗎？標記後會移到「已淘汰」清單。`)) return;
+    await supabase.from("plants").update({ status: "dead" }).eq("id", id);
+    await supabase.from("plant_events").insert({ plant_id: id, type: "death" });
+    load();
+  }
+
   const [tagCopied, setTagCopied] = useState(false);
 
   async function handleGenerateTag() {
@@ -156,6 +163,7 @@ export default function PlantDetail() {
 
   const editColumns = [
     { key: "name", label: "名稱", width: 140 },
+    { key: "tag_uid", label: "UID（可自行輸入修改）", width: 140 },
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類", width: 140 },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
@@ -172,6 +180,7 @@ export default function PlantDetail() {
       .from("plants")
       .update({
         name: row.name,
+        tag_uid: row.tag_uid || null,
         species: row.species || null,
         custom_species: row.custom_species || null,
         field_id: row.field_id || null,
@@ -244,6 +253,11 @@ export default function PlantDetail() {
           <button className="btn-secondary" onClick={() => setShowBreed(true)}>
             🌸 配種／登記血統
           </button>
+          {plant.status === "alive" && (
+            <button className="btn-danger" onClick={handleMarkDead}>
+              🥀 標記死亡
+            </button>
+          )}
         </div>
       </div>
 
@@ -369,6 +383,7 @@ export default function PlantDetail() {
           initialRows={[
             {
               name: plant.name,
+              tag_uid: plant.tag_uid,
               species: plant.species,
               custom_species: plant.custom_species,
               field_id: plant.field_id,
@@ -398,5 +413,5 @@ function Stat({ label, value }) {
 }
 
 function eventLabel(type) {
-  return { repot: "🪴 換盆", move: "🚚 搬家", split: "✂️ 切盆拆分", breed: "🌸 配種", sale: "💰 出售" }[type] || type;
+  return { repot: "🪴 換盆", move: "🚚 搬家", split: "✂️ 切盆拆分", breed: "🌸 配種", sale: "💰 出售", death: "🥀 標記死亡" }[type] || type;
 }

@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [sellTarget, setSellTarget] = useState(null);
   const [filterField, setFilterField] = useState("");
   const [filterStatus, setFilterStatus] = useState("alive");
+  const [search, setSearch] = useState("");
   const [configError, setConfigError] = useState(false);
 
   async function loadAll() {
@@ -70,11 +71,17 @@ export default function Dashboard() {
   const filtered = plants.filter((p) => {
     if (filterField && p.field_id !== filterField) return false;
     if (filterStatus && p.status !== filterStatus) return false;
+    if (search.trim()) {
+      const kw = search.trim().toLowerCase();
+      const hit = p.name?.toLowerCase().includes(kw) || p.tag_uid?.toLowerCase().includes(kw);
+      if (!hit) return false;
+    }
     return true;
   });
 
   const plantColumns = [
     { key: "name", label: "名稱", required: true, width: 140 },
+    { key: "tag_uid", label: "UID（選填，可自訂；留空可稍後在詳情頁設定）", width: 140 },
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類(選其他時填)", width: 140 },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
@@ -92,6 +99,7 @@ export default function Dashboard() {
       .filter((r) => r.name)
       .map((r) => ({
         name: r.name,
+        tag_uid: r.tag_uid || null,
         species: r.species || null,
         custom_species: r.custom_species || null,
         field_id: r.field_id || null,
@@ -151,6 +159,13 @@ export default function Dashboard() {
     loadAll();
   }
 
+  async function handleMarkDead(plant) {
+    if (!confirm(`確定要將「${plant.name}」標記為死亡嗎？標記後會移到「已淘汰」清單。`)) return;
+    await supabase.from("plants").update({ status: "dead" }).eq("id", plant.id);
+    await supabase.from("plant_events").insert({ plant_id: plant.id, type: "death" });
+    loadAll();
+  }
+
   async function handleDelete(plant) {
     if (!confirm(`確定要刪除「${plant.name}」嗎？相關照片與紀錄也會一併刪除，此動作無法復原。`)) return;
     await supabase.from("plants").delete().eq("id", plant.id);
@@ -194,6 +209,12 @@ export default function Dashboard() {
       </div>
 
       <div className="flex gap-2 mb-4 flex-wrap">
+        <input
+          className="input w-48"
+          placeholder="🔍 搜尋名稱或 UID"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <select className="input w-40" value={filterField} onChange={(e) => setFilterField(e.target.value)}>
           <option value="">所有場域</option>
           {fields.map((f) => (
@@ -226,6 +247,7 @@ export default function Dashboard() {
               coverPhoto={covers[p.id]}
               onMove={setMoveTarget}
               onSell={setSellTarget}
+              onDeath={handleMarkDead}
               onDelete={handleDelete}
             />
           ))}

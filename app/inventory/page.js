@@ -75,6 +75,8 @@ export default function InventoryPage() {
     load();
   }
 
+  const totalInventoryValue = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
+
   const sortedItems = [...items].sort((a, b) => {
     if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
     return 0; // 已經是依 created_at desc 從資料庫拿出來的
@@ -148,6 +150,11 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      <div className="card w-fit">
+        <div className="text-xs text-gray-500">資材庫存價值（庫存量 × 單價，計入成本）</div>
+        <div className="font-bold text-lg text-leaf-900">{formatMoney(totalInventoryValue)}</div>
+      </div>
+
       <div className="flex items-center gap-2 text-sm">
         <span className="text-gray-500">排序：</span>
         <select className="input w-40" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
@@ -169,7 +176,11 @@ export default function InventoryPage() {
                 庫存：{it.qty} {it.unit}
               </div>
               {it.seller && <div className="text-xs text-gray-500">賣家：{it.seller}</div>}
-              {it.price != null && <div className="text-xs text-gray-500">單價：{formatMoney(it.price)}</div>}
+              {it.price != null && (
+                <div className="text-xs text-gray-500">
+                  單價：{formatMoney(it.price)}・小計：{formatMoney((Number(it.qty) || 0) * (Number(it.price) || 0))}
+                </div>
+              )}
               {it.notes && <div className="text-xs text-gray-500">{it.notes}</div>}
               <div className="flex gap-2 mt-1">
                 <button className="btn-secondary text-xs px-2 py-1" onClick={() => setAdjustTarget(it)}>
@@ -236,7 +247,7 @@ export default function InventoryPage() {
         <BatchTableForm
           title={`調整庫存：${adjustTarget.name}（目前 ${adjustTarget.qty} ${adjustTarget.unit}）`}
           columns={[
-            { key: "delta", label: "異動量（+入庫 / -扣除）", type: "number", required: true, width: 120 },
+            { key: "delta", label: "異動量（+入庫 / -扣除）", type: "number", required: true, width: 120, allowNegative: true },
             { key: "reason", label: "原因", width: 200 },
           ]}
           onSubmit={handleAdjust}

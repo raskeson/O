@@ -39,11 +39,6 @@ export default function CustodyPage() {
     setEnabled(next);
   }
 
-  async function checkInWatered(plantId) {
-    await supabase.from("plants").update({ last_watered: new Date().toISOString().slice(0, 10) }).eq("id", plantId);
-    load();
-  }
-
   const fieldMap = Object.fromEntries(fields.map((f) => [f.id, f.name]));
   const sorted = [...plants].sort((a, b) => {
     const ua = urgencyOrder[waterUrgency(a).level];
@@ -79,12 +74,6 @@ export default function CustodyPage() {
                 </div>
                 <div className="text-sm mt-1 font-medium">💧 {urgency.label}</div>
                 {p.care_note && <div className="text-xs mt-1">🌿 性質：{p.care_note}</div>}
-                <button
-                  onClick={() => checkInWatered(p.id)}
-                  className="mt-2 w-full text-sm font-medium bg-white/70 hover:bg-white border border-current rounded-lg py-1.5"
-                >
-                  💧 一鍵打卡：今天已澆水
-                </button>
               </div>
             );
           })}

@@ -14,9 +14,9 @@ const statusColor = {
   sold: "bg-blue-100 text-blue-700",
   dead: "bg-gray-200 text-gray-600",
 };
-const statusLabel = { alive: "健在", sold: "已售出", dead: "已淘汰" };
+const statusLabel = { alive: "健在", sold: "已售出", dead: "已死亡" };
 
-export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell, onDelete }) {
+export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell, onDeath, onDelete }) {
   const urgency = waterUrgency(plant);
   return (
     <div className="card flex flex-col gap-2">
@@ -60,6 +60,10 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
         </div>
       )}
 
+      {plant.status === "dead" && (
+        <div className="text-xs px-2 py-1 rounded-lg w-fit bg-gray-100 text-gray-500">🥀 已標記死亡</div>
+      )}
+
       <div className="flex flex-wrap gap-1.5 mt-1">
         <Link href={`/plants/${plant.id}`} className="btn-secondary text-xs px-2 py-1">
           詳情/相簿/血統
@@ -71,6 +75,9 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
             </button>
             <button onClick={() => onSell(plant)} className="btn-secondary text-xs px-2 py-1">
               💰 出售
+            </button>
+            <button onClick={() => onDeath(plant)} className="btn-secondary text-xs px-2 py-1">
+              🥀 死亡
             </button>
           </>
         )}
