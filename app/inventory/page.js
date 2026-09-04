@@ -54,7 +54,18 @@ export default function InventoryPage() {
         notes: r.notes || null,
       }));
     if (!payload.length) return;
-    await supabase.from("inventory_items").insert(payload);
+    const { data: created } = await supabase.from("inventory_items").insert(payload).select();
+    // 有單價與數量的話，直接把這筆採購併入財務總帳的「其他支出」
+    const financeRows = (created || [])
+      .filter((it) => it.qty && it.price)
+      .map((it) => ({
+        type: "expense",
+        amount: Number(it.qty) * Number(it.price),
+        category: "資材採購",
+        note: `${it.name}（${it.qty}${it.unit} × ${formatMoney(it.price)}）`,
+        entry_date: new Date().toISOString().slice(0, 10),
+      }));
+    if (financeRows.length) await supabase.from("finance_entries").insert(financeRows);
     load();
   }
 
@@ -71,11 +82,19 @@ export default function InventoryPage() {
     const item = adjustTarget;
     await supabase.from("inventory_items").update({ qty: Number(item.qty) + delta }).eq("id", item.id);
     await supabase.from("inventory_logs").insert({ item_id: item.id, delta, reason: row.reason || "手動調整" });
+    // 入庫且有單價時，這筆補貨也算一筆支出，併入財務總帳
+    if (delta > 0 && item.price) {
+      await supabase.from("finance_entries").insert({
+        type: "expense",
+        amount: delta * Number(item.price),
+        category: "資材採購",
+        note: `${item.name} 補貨（${delta}${item.unit} × ${formatMoney(item.price)}）`,
+        entry_date: new Date().toISOString().slice(0, 10),
+      });
+    }
     setAdjustTarget(null);
     load();
   }
-
-  const totalInventoryValue = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
 
   const sortedItems = [...items].sort((a, b) => {
     if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
@@ -139,7 +158,10 @@ export default function InventoryPage() {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl font-bold text-leaf-900">資材庫存與賣家比價</h1>
+        <div>
+          <h1 className="text-xl font-bold text-leaf-900">資材庫存與賣家比價</h1>
+          <p className="text-xs text-gray-500 mt-0.5">新增資材時若有填「數量」與「單價」，會自動記一筆支出到財務總帳；補貨（調整庫存為正數）同樣會自動入帳。</p>
+        </div>
         <div className="flex gap-2 flex-wrap">
           <button className="btn-secondary" onClick={() => setShowConvert(true)}>
             🔁 換盆規格轉換
@@ -148,11 +170,6 @@ export default function InventoryPage() {
             ＋ 新增資材（表格批次輸入）
           </button>
         </div>
-      </div>
-
-      <div className="card w-fit">
-        <div className="text-xs text-gray-500">資材庫存價值（庫存量 × 單價，計入成本）</div>
-        <div className="font-bold text-lg text-leaf-900">{formatMoney(totalInventoryValue)}</div>
       </div>
 
       <div className="flex items-center gap-2 text-sm">
@@ -176,11 +193,7 @@ export default function InventoryPage() {
                 庫存：{it.qty} {it.unit}
               </div>
               {it.seller && <div className="text-xs text-gray-500">賣家：{it.seller}</div>}
-              {it.price != null && (
-                <div className="text-xs text-gray-500">
-                  單價：{formatMoney(it.price)}・小計：{formatMoney((Number(it.qty) || 0) * (Number(it.price) || 0))}
-                </div>
-              )}
+              {it.price != null && <div className="text-xs text-gray-500">單價：{formatMoney(it.price)}</div>}
               {it.notes && <div className="text-xs text-gray-500">{it.notes}</div>}
               <div className="flex gap-2 mt-1">
                 <button className="btn-secondary text-xs px-2 py-1" onClick={() => setAdjustTarget(it)}>

@@ -9,24 +9,17 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGri
 export default function FinancePage() {
   const [entries, setEntries] = useState([]);
   const [plants, setPlants] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [showAdd, setShowAdd] = useState(false);
 
   async function load() {
-    const [{ data: e }, { data: p }, { data: inv }] = await Promise.all([
+    const [{ data: e }, { data: p }] = await Promise.all([
       supabase.from("finance_entries").select("*").order("entry_date", { ascending: false }),
       supabase.from("plants").select("id,name"),
-      supabase.from("inventory_items").select("qty,price"),
     ]);
     setEntries(e || []);
     setPlants(p || []);
-    setInventoryItems(inv || []);
   }
 
-  const inventoryValue = useMemo(
-    () => inventoryItems.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0),
-    [inventoryItems]
-  );
   useEffect(() => {
     load();
   }, []);
@@ -92,13 +85,12 @@ export default function FinancePage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Stat label="購入成本" value={formatMoney(summary.purchase)} />
         <Stat label="出售收入" value={formatMoney(summary.sale)} />
         <Stat label="其他支出" value={formatMoney(summary.expense)} />
         <Stat label="其他收入" value={formatMoney(summary.income)} />
         <Stat label="已實現純利" value={formatMoney(summary.profit)} highlight={summary.profit >= 0 ? "pos" : "neg"} />
-        <Stat label="資材庫存價值（計入成本）" value={formatMoney(inventoryValue)} />
       </div>
 
       <div className="card">

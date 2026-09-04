@@ -130,11 +130,6 @@ export default function PlantDetail() {
     load();
   }
 
-  async function markWatered() {
-    await supabase.from("plants").update({ last_watered: new Date().toISOString().slice(0, 10) }).eq("id", id);
-    load();
-  }
-
   async function handleMarkDead() {
     if (!confirm(`確定要將「${plant.name}」標記為死亡嗎？標記後會移到「已淘汰」清單。`)) return;
     await supabase.from("plants").update({ status: "dead" }).eq("id", id);
@@ -241,9 +236,6 @@ export default function PlantDetail() {
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          <button className="btn-secondary" onClick={markWatered}>
-            💧 記錄今日已澆水
-          </button>
           <button className="btn-secondary" onClick={() => setShowRepot(true)}>
             🪴 換盆
           </button>
