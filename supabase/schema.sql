@@ -175,5 +175,29 @@ alter table plants add column if not exists tag_uid text;
 
 -- ============================================
 -- Storage：另外到 Supabase 後台 Storage 建立一個名為 plant-photos 的
--- Public bucket 即可（不需要在這裡執行 SQL，見 README 步驟）。
+-- Public bucket（見 README 步驟）。
+--
+-- 重要：光把 bucket 設成 Public，只代表「別人可以讀取照片網址」，
+-- 並不代表「網站可以上傳照片」——上傳一樣會被 Row Level Security 擋下
+-- （錯誤訊息通常是 "new row violates row-level security policy"）。
+-- 一定要額外執行下面這段，才能真正允許上傳／刪除照片：
 -- ============================================
+drop policy if exists "Public read access for plant-photos" on storage.objects;
+create policy "Public read access for plant-photos"
+  on storage.objects for select
+  using ( bucket_id = 'plant-photos' );
+
+drop policy if exists "Allow uploads to plant-photos" on storage.objects;
+create policy "Allow uploads to plant-photos"
+  on storage.objects for insert
+  with check ( bucket_id = 'plant-photos' );
+
+drop policy if exists "Allow updates to plant-photos" on storage.objects;
+create policy "Allow updates to plant-photos"
+  on storage.objects for update
+  using ( bucket_id = 'plant-photos' );
+
+drop policy if exists "Allow deletes to plant-photos" on storage.objects;
+create policy "Allow deletes to plant-photos"
+  on storage.objects for delete
+  using ( bucket_id = 'plant-photos' );

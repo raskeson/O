@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS } from "@/lib/constants";
 import PlantCard from "@/components/PlantCard";
 import BatchTableForm from "@/components/BatchTableForm";
-import { formatMoney } from "@/lib/utils";
+import { formatMoney, waterUrgency } from "@/lib/utils";
 
 export default function Dashboard() {
   const [plants, setPlants] = useState([]);
@@ -54,6 +54,27 @@ export default function Dashboard() {
   }, []);
 
   const fieldMap = useMemo(() => Object.fromEntries(fields.map((f) => [f.id, f.name])), [fields]);
+
+  // 今天該澆水（含已逾期）的健在植株
+  const dueToWater = useMemo(
+    () => plants.filter((p) => p.status === "alive" && ["overdue", "today"].includes(waterUrgency(p).level)),
+    [plants]
+  );
+
+  async function handleWaterAllDue() {
+    if (!dueToWater.length) return;
+    if (!confirm(`確定要把 ${dueToWater.length} 株今天該澆水的植物，一次標記為今天已澆水嗎？`)) return;
+    const ids = dueToWater.map((p) => p.id);
+    const { error } = await supabase
+      .from("plants")
+      .update({ last_watered: new Date().toISOString().slice(0, 10) })
+      .in("id", ids);
+    if (error) {
+      alert("一鍵澆水失敗：" + error.message);
+      return;
+    }
+    loadAll();
+  }
 
   // 總投入金額：所有健在植株的購入成本加總
   // 估計市價：所有健在植株的估計市價加總
@@ -186,9 +207,18 @@ export default function Dashboard() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h1 className="text-xl font-bold text-leaf-900">植物圖鑑</h1>
-        <button className="btn-primary" onClick={() => setShowAdd(true)}>
-          ＋ 新增植物（表格批次輸入）
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button
+            className={`btn-secondary ${!dueToWater.length ? "opacity-50 cursor-not-allowed" : ""}`}
+            onClick={handleWaterAllDue}
+            disabled={!dueToWater.length}
+          >
+            💧 一鍵澆水（今日待澆 {dueToWater.length} 株）
+          </button>
+          <button className="btn-primary" onClick={() => setShowAdd(true)}>
+            ＋ 新增植物（表格批次輸入）
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">

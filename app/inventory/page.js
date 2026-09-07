@@ -54,10 +54,14 @@ export default function InventoryPage() {
         notes: r.notes || null,
       }));
     if (!payload.length) return;
-    const { data: created } = await supabase.from("inventory_items").insert(payload).select();
+    const { data: created, error } = await supabase.from("inventory_items").insert(payload).select();
+    if (error) {
+      alert("新增資材失敗：" + error.message);
+      return;
+    }
     // 有單價與數量的話，直接把這筆採購併入財務總帳的「其他支出」
     const financeRows = (created || [])
-      .filter((it) => it.qty && it.price)
+      .filter((it) => Number(it.qty) > 0 && Number(it.price) > 0)
       .map((it) => ({
         type: "expense",
         amount: Number(it.qty) * Number(it.price),
@@ -65,7 +69,10 @@ export default function InventoryPage() {
         note: `${it.name}（${it.qty}${it.unit} × ${formatMoney(it.price)}）`,
         entry_date: new Date().toISOString().slice(0, 10),
       }));
-    if (financeRows.length) await supabase.from("finance_entries").insert(financeRows);
+    if (financeRows.length) {
+      const { error: financeError } = await supabase.from("finance_entries").insert(financeRows);
+      if (financeError) alert("資材已新增，但自動記帳失敗：" + financeError.message);
+    }
     load();
   }
 
@@ -80,17 +87,22 @@ export default function InventoryPage() {
     const delta = Number(row.delta);
     if (!delta) return;
     const item = adjustTarget;
-    await supabase.from("inventory_items").update({ qty: Number(item.qty) + delta }).eq("id", item.id);
+    const { error: qtyError } = await supabase.from("inventory_items").update({ qty: Number(item.qty) + delta }).eq("id", item.id);
+    if (qtyError) {
+      alert("調整庫存失敗：" + qtyError.message);
+      return;
+    }
     await supabase.from("inventory_logs").insert({ item_id: item.id, delta, reason: row.reason || "手動調整" });
     // 入庫且有單價時，這筆補貨也算一筆支出，併入財務總帳
-    if (delta > 0 && item.price) {
-      await supabase.from("finance_entries").insert({
+    if (delta > 0 && Number(item.price) > 0) {
+      const { error: financeError } = await supabase.from("finance_entries").insert({
         type: "expense",
         amount: delta * Number(item.price),
         category: "資材採購",
         note: `${item.name} 補貨（${delta}${item.unit} × ${formatMoney(item.price)}）`,
         entry_date: new Date().toISOString().slice(0, 10),
       });
+      if (financeError) alert("庫存已調整，但自動記帳失敗：" + financeError.message);
     }
     setAdjustTarget(null);
     load();

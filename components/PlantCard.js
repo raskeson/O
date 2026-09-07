@@ -6,6 +6,7 @@ const urgencyColor = {
   overdue: "bg-red-100 text-red-700",
   today: "bg-amber-100 text-amber-700",
   ok: "bg-leaf-50 text-leaf-700",
+  done: "bg-leaf-100 text-leaf-700",
   none: "bg-gray-100 text-gray-500",
 };
 

@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS } from "@/lib/constants";
-import { speciesLabel, potSizeLabel, formatMoney, genTagUid } from "@/lib/utils";
+import { speciesLabel, potSizeLabel, formatMoney, genTagUid, waterUrgency } from "@/lib/utils";
 import PhotoUploader from "@/components/PhotoUploader";
 import BatchTableForm from "@/components/BatchTableForm";
 
@@ -130,6 +130,11 @@ export default function PlantDetail() {
     load();
   }
 
+  async function markWatered() {
+    await supabase.from("plants").update({ last_watered: new Date().toISOString().slice(0, 10) }).eq("id", id);
+    load();
+  }
+
   async function handleMarkDead() {
     if (!confirm(`確定要將「${plant.name}」標記為死亡嗎？標記後會移到「已淘汰」清單。`)) return;
     await supabase.from("plants").update({ status: "dead" }).eq("id", id);
@@ -233,9 +238,15 @@ export default function PlantDetail() {
           <Stat label="估計市價" value={formatMoney(plant.estimated_value)} />
           <Stat label="取得日期" value={plant.acquired_date || "-"} />
           <Stat label="性質" value={plant.care_note || "未設定"} />
+          {plant.status === "alive" && <Stat label="澆水狀態" value={`💧 ${waterUrgency(plant).label}`} />}
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
+          {plant.status === "alive" && (
+            <button className="btn-secondary" onClick={markWatered}>
+              💧 記錄已澆水
+            </button>
+          )}
           <button className="btn-secondary" onClick={() => setShowRepot(true)}>
             🪴 換盆
           </button>

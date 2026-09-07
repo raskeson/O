@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { speciesLabel, potSizeLabel, waterUrgency } from "@/lib/utils";
 
-const urgencyOrder = { overdue: 0, today: 1, ok: 2, none: 3 };
+const urgencyOrder = { overdue: 0, today: 1, ok: 2, done: 3, none: 4 };
 const urgencyColor = {
   overdue: "bg-red-100 text-red-700 border-red-200",
   today: "bg-amber-100 text-amber-700 border-amber-200",
   ok: "bg-leaf-50 text-leaf-700 border-leaf-200",
+  done: "bg-leaf-100 text-leaf-800 border-leaf-300",
   none: "bg-gray-100 text-gray-500 border-gray-200",
 };
 
@@ -37,6 +38,11 @@ export default function CustodyPage() {
     const next = !enabled;
     await supabase.from("app_settings").upsert({ key: "custody_mode", value: { enabled: next }, updated_at: new Date().toISOString() });
     setEnabled(next);
+  }
+
+  async function markWatered(plantId) {
+    await supabase.from("plants").update({ last_watered: new Date().toISOString().slice(0, 10) }).eq("id", plantId);
+    load();
   }
 
   const fieldMap = Object.fromEntries(fields.map((f) => [f.id, f.name]));
@@ -74,6 +80,14 @@ export default function CustodyPage() {
                 </div>
                 <div className="text-sm mt-1 font-medium">💧 {urgency.label}</div>
                 {p.care_note && <div className="text-xs mt-1">🌿 性質：{p.care_note}</div>}
+                {urgency.level !== "done" && (
+                  <button
+                    onClick={() => markWatered(p.id)}
+                    className="mt-2 w-full text-sm font-medium bg-white/70 hover:bg-white border border-current rounded-lg py-1.5"
+                  >
+                    💧 一鍵澆水
+                  </button>
+                )}
               </div>
             );
           })}

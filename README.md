@@ -41,6 +41,7 @@
 2. 幫專案取名、設一組資料庫密碼（記下來，之後用不太到但要留存）、選擇離台灣近的 region（例如 Singapore），建立專案（約需 1~2 分鐘初始化）。
 3. 左側選單點 **SQL Editor** → **New query**，把本專案 `supabase/schema.sql` 這個檔案的**全部內容**貼進去，按 **Run**。這會建立所有需要的資料表。
 4. 左側選單點 **Storage** → **Create a new bucket**，Bucket name 輸入 `plant-photos`，**Public bucket 打勾（一定要打開，否則照片無法顯示）**，建立。
+   > ⚠️ **這一步做完照片上傳還是會失敗**！Public bucket 只代表「別人可以讀取照片」，網站要能**上傳**照片還需要額外的權限設定。因為你已經在第 3 步跑過 `schema.sql`，裡面已經包含這段權限設定了，所以理論上不用再做什麼。如果你是先做這步、後跑 schema.sql，或是上傳照片時看到「new row violates row-level security policy」的錯誤，回到 **SQL Editor** 重新貼上並執行一次 `supabase/schema.sql` 最下面 Storage 那一段（4 個 `create policy ...`）即可。
 5. 左側選單點 **Project Settings → API**，把以下兩個值記下來，等一下會用到：
    - **Project URL**（例如 `https://xxxxx.supabase.co`）
    - **anon public** 這組 API Key（一長串文字）
