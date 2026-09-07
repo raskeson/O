@@ -155,16 +155,27 @@ alter table compost_bins enable row level security;
 alter table compost_materials enable row level security;
 alter table app_settings enable row level security;
 
+drop policy if exists "allow all fields" on fields;
 create policy "allow all fields" on fields for all using (true) with check (true);
+drop policy if exists "allow all plants" on plants;
 create policy "allow all plants" on plants for all using (true) with check (true);
+drop policy if exists "allow all plant_photos" on plant_photos;
 create policy "allow all plant_photos" on plant_photos for all using (true) with check (true);
+drop policy if exists "allow all plant_events" on plant_events;
 create policy "allow all plant_events" on plant_events for all using (true) with check (true);
+drop policy if exists "allow all finance_entries" on finance_entries;
 create policy "allow all finance_entries" on finance_entries for all using (true) with check (true);
+drop policy if exists "allow all inventory_items" on inventory_items;
 create policy "allow all inventory_items" on inventory_items for all using (true) with check (true);
+drop policy if exists "allow all inventory_logs" on inventory_logs;
 create policy "allow all inventory_logs" on inventory_logs for all using (true) with check (true);
+drop policy if exists "allow all fertilizers" on fertilizers;
 create policy "allow all fertilizers" on fertilizers for all using (true) with check (true);
+drop policy if exists "allow all compost_bins" on compost_bins;
 create policy "allow all compost_bins" on compost_bins for all using (true) with check (true);
+drop policy if exists "allow all compost_materials" on compost_materials;
 create policy "allow all compost_materials" on compost_materials for all using (true) with check (true);
+drop policy if exists "allow all app_settings" on app_settings;
 create policy "allow all app_settings" on app_settings for all using (true) with check (true);
 
 -- ============================================
@@ -201,3 +212,21 @@ drop policy if exists "Allow deletes to plant-photos" on storage.objects;
 create policy "Allow deletes to plant-photos"
   on storage.objects for delete
   using ( bucket_id = 'plant-photos' );
+
+-- ============================================
+-- 更新：賣家清單（可自行新增、留存備註，供資材庫存的賣家欄位選用）
+-- ============================================
+create table if not exists sellers (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  notes text,
+  created_at timestamptz default now()
+);
+alter table sellers enable row level security;
+drop policy if exists "allow all sellers" on sellers;
+create policy "allow all sellers" on sellers for all using (true) with check (true);
+
+-- ============================================
+-- 更新：死亡原因欄位
+-- ============================================
+alter table plants add column if not exists death_reason text;

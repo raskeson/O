@@ -9,21 +9,26 @@ export default function InventoryPage() {
   const [items, setItems] = useState([]);
   const [ferts, setFerts] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [sellers, setSellers] = useState([]);
   const [showAddItem, setShowAddItem] = useState(false);
   const [showAddFert, setShowAddFert] = useState(false);
+  const [showAddSeller, setShowAddSeller] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState(null);
   const [showConvert, setShowConvert] = useState(false);
   const [sortBy, setSortBy] = useState("recent"); // recent | rating
+  const [sellerFilter, setSellerFilter] = useState("");
 
   async function load() {
-    const [{ data: it }, { data: fz }, { data: lg }] = await Promise.all([
+    const [{ data: it }, { data: fz }, { data: lg }, { data: sl }] = await Promise.all([
       supabase.from("inventory_items").select("*").order("created_at", { ascending: false }),
       supabase.from("fertilizers").select("*").order("created_at", { ascending: false }),
       supabase.from("inventory_logs").select("*, inventory_items(name)").order("created_at", { ascending: false }).limit(20),
+      supabase.from("sellers").select("*").order("name"),
     ]);
     setItems(it || []);
     setFerts(fz || []);
     setLogs(lg || []);
+    setSellers(sl || []);
   }
   useEffect(() => {
     load();
@@ -34,11 +39,35 @@ export default function InventoryPage() {
     { key: "category", label: "分類", width: 100 },
     { key: "qty", label: "目前庫存量", type: "number", width: 100 },
     { key: "unit", label: "單位", width: 80 },
-    { key: "seller", label: "購買處/賣家", width: 140 },
+    {
+      key: "seller",
+      label: sellers.length ? "購買處/賣家（如清單沒有，先按下方「＋新增賣家」）" : "購買處/賣家（尚未建立賣家，請先按下方「＋新增賣家」）",
+      type: "select",
+      options: sellers.map((s) => ({ value: s.name, label: s.name })),
+      width: 140,
+    },
     { key: "price", label: "單價", type: "number", width: 90 },
     { key: "rating", label: "賣家評分(1-5)", type: "number", width: 100 },
     { key: "notes", label: "備註", width: 160 },
   ];
+
+  async function handleAddSeller(rows) {
+    const payload = rows.filter((r) => r.name).map((r) => ({ name: r.name, notes: r.notes || null }));
+    if (!payload.length) return;
+    const { error } = await supabase.from("sellers").upsert(payload, { onConflict: "name" });
+    if (error) {
+      alert("新增賣家失敗：" + error.message);
+      return;
+    }
+    load();
+  }
+
+  async function handleDeleteSeller(seller) {
+    if (!confirm(`確定刪除賣家「${seller.name}」？（已使用此賣家的資材紀錄不會被刪除）`)) return;
+    await supabase.from("sellers").delete().eq("id", seller.id);
+    if (sellerFilter === seller.name) setSellerFilter("");
+    load();
+  }
 
   async function handleAddItem(rows) {
     const payload = rows
@@ -108,10 +137,12 @@ export default function InventoryPage() {
     load();
   }
 
-  const sortedItems = [...items].sort((a, b) => {
-    if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
-    return 0; // 已經是依 created_at desc 從資料庫拿出來的
-  });
+  const sortedItems = [...items]
+    .filter((it) => !sellerFilter || it.seller === sellerFilter)
+    .sort((a, b) => {
+      if (sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
+      return 0; // 已經是依 created_at desc 從資料庫拿出來的
+    });
 
   // 換盆規格轉換：例如「10盆 1吋 換 6吋盆」，自動扣減對應數量的盆器，
   // 以及依盆器體積差換算出的介質用量（公升，向上取整方便對照庫存單位）
@@ -175,6 +206,9 @@ export default function InventoryPage() {
           <p className="text-xs text-gray-500 mt-0.5">新增資材時若有填「數量」與「單價」，會自動記一筆支出到財務總帳；補貨（調整庫存為正數）同樣會自動入帳。</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button className="btn-secondary" onClick={() => setShowAddSeller(true)}>
+            ＋ 新增賣家
+          </button>
           <button className="btn-secondary" onClick={() => setShowConvert(true)}>
             🔁 換盆規格轉換
           </button>
@@ -182,6 +216,39 @@ export default function InventoryPage() {
             ＋ 新增資材（表格批次輸入）
           </button>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="flex items-center gap-2 text-sm flex-wrap">
+          <span className="text-gray-500">依賣家查看：</span>
+          <select className="input w-48" value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)}>
+            <option value="">全部賣家</option>
+            {sellers.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {sellerFilter && (
+            <button
+              className="text-red-500 text-xs"
+              onClick={() => {
+                const s = sellers.find((x) => x.name === sellerFilter);
+                if (s) handleDeleteSeller(s);
+              }}
+            >
+              🗑 刪除此賣家
+            </button>
+          )}
+        </div>
+        {sellerFilter && (
+          <div className="mt-2 text-sm">
+            <div className="text-gray-600">
+              備註：{sellers.find((s) => s.name === sellerFilter)?.notes || "（尚未填寫備註，可到「＋新增賣家」用同名補上）"}
+            </div>
+            <div className="text-gray-500 mt-1">在此賣家購買過的資材，已篩選顯示於下方清單。</div>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 text-sm">
@@ -264,6 +331,18 @@ export default function InventoryPage() {
 
       {showAddItem && (
         <BatchTableForm title="新增資材" columns={itemColumns} onSubmit={handleAddItem} onClose={() => setShowAddItem(false)} submitLabel="全部新增" />
+      )}
+      {showAddSeller && (
+        <BatchTableForm
+          title="新增/更新賣家（同名會更新備註）"
+          columns={[
+            { key: "name", label: "賣家名稱", required: true, width: 140 },
+            { key: "notes", label: "備註（例如：CP值低、出貨快）", type: "textarea", width: 200 },
+          ]}
+          onSubmit={handleAddSeller}
+          onClose={() => setShowAddSeller(false)}
+          submitLabel="全部儲存"
+        />
       )}
       {showAddFert && (
         <BatchTableForm title="新增肥料" columns={fertColumns} onSubmit={handleAddFert} onClose={() => setShowAddFert(false)} submitLabel="全部新增" />

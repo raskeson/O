@@ -180,10 +180,13 @@ export default function Dashboard() {
     loadAll();
   }
 
-  async function handleMarkDead(plant) {
-    if (!confirm(`確定要將「${plant.name}」標記為死亡嗎？標記後會移到「已淘汰」清單。`)) return;
-    await supabase.from("plants").update({ status: "dead" }).eq("id", plant.id);
-    await supabase.from("plant_events").insert({ plant_id: plant.id, type: "death" });
+  const [deathTarget, setDeathTarget] = useState(null);
+
+  async function handleMarkDead(rows) {
+    const row = rows[0];
+    await supabase.from("plants").update({ status: "dead", death_reason: row.death_reason || null }).eq("id", deathTarget.id);
+    await supabase.from("plant_events").insert({ plant_id: deathTarget.id, type: "death", note: row.death_reason || null });
+    setDeathTarget(null);
     loadAll();
   }
 
@@ -277,7 +280,7 @@ export default function Dashboard() {
               coverPhoto={covers[p.id]}
               onMove={setMoveTarget}
               onSell={setSellTarget}
-              onDeath={handleMarkDead}
+              onDeath={setDeathTarget}
               onDelete={handleDelete}
             />
           ))}
@@ -318,6 +321,16 @@ export default function Dashboard() {
           onSubmit={handleSell}
           onClose={() => setSellTarget(null)}
           submitLabel="確認出售"
+        />
+      )}
+
+      {deathTarget && (
+        <BatchTableForm
+          title={`標記死亡：${deathTarget.name}`}
+          columns={[{ key: "death_reason", label: "死亡原因（選填，會直接顯示在卡片上）", type: "textarea", width: 220 }]}
+          onSubmit={handleMarkDead}
+          onClose={() => setDeathTarget(null)}
+          submitLabel="確認標記死亡"
         />
       )}
     </div>

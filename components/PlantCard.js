@@ -65,7 +65,9 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
       )}
 
       {plant.status === "dead" && (
-        <div className="text-xs px-2 py-1 rounded-lg w-fit bg-gray-100 text-gray-500">🥀 已標記死亡</div>
+        <div className="text-xs px-2 py-1 rounded-lg w-fit bg-gray-100 text-gray-500">
+          🥀 已標記死亡{plant.death_reason ? `・原因：${plant.death_reason}` : ""}
+        </div>
       )}
 
       <div className="flex flex-wrap gap-1.5 mt-1">

@@ -48,8 +48,34 @@ export async function GET(request) {
     const heavyRain = periods.some((p) => p.pop >= 70);
     const coldSnap = periods.some((p) => p.minT !== null && p.minT <= 10);
 
+    // 額外查詢「現在天氣觀測報告」(O-A0003-001) 取得該縣市測站的即時溫度，
+    // 而不是只有預報的最高/最低區間
+    let current = null;
+    try {
+      const obsUrl = `https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization=${apiKey}`;
+      const obsRes = await fetch(obsUrl, { next: { revalidate: 300 } }); // 快取5分鐘
+      const obsJson = await obsRes.json();
+      const stations = obsJson?.records?.Station || [];
+      const candidates = stations.filter(
+        (s) => s.GeoInfo?.CountyName === city && Number(s.WeatherElement?.AirTemperature) > -90
+      );
+      if (candidates.length) {
+        const st = candidates[0];
+        current = {
+          stationName: st.StationName,
+          obsTime: st.ObsTime?.DateTime,
+          temp: Number(st.WeatherElement?.AirTemperature),
+          humidity: Number(st.WeatherElement?.RelativeHumidity),
+          weather: st.WeatherElement?.Weather,
+        };
+      }
+    } catch {
+      // 即時觀測查詢失敗不影響整體天氣預報結果，忽略即可
+    }
+
     return NextResponse.json({
       city,
+      current,
       periods,
       alerts: { heavyRain, coldSnap },
       fetchedAt: new Date().toISOString(),

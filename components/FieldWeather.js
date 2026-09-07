@@ -18,13 +18,28 @@ export default function FieldWeather({ city, plantsInField = [] }) {
   if (!weather) return <div className="text-xs text-gray-400">查詢天氣中...</div>;
 
   const next = weather.periods?.[0];
+  const current = weather.current;
 
   return (
     <div className="text-xs space-y-1.5">
+      {current ? (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="px-2 py-0.5 rounded bg-leaf-100 font-semibold text-leaf-800">
+            🌡️ 目前 {current.temp.toFixed(1)}°C
+          </span>
+          {current.humidity != null && <span className="px-2 py-0.5 rounded bg-leaf-50">濕度 {current.humidity}%</span>}
+          {current.weather && <span className="px-2 py-0.5 rounded bg-leaf-50">{current.weather}</span>}
+          <span className="text-gray-400">
+            測站：{current.stationName}・{current.obsTime ? new Date(current.obsTime).toLocaleTimeString("zh-TW") : ""}
+          </span>
+        </div>
+      ) : (
+        <div className="text-gray-400">此縣市暫無即時測站觀測資料</div>
+      )}
       {next && (
         <div className="flex flex-wrap gap-2">
           <span className="px-2 py-0.5 rounded bg-leaf-50">{next.wx}</span>
-          <span className="px-2 py-0.5 rounded bg-leaf-50">{next.minT}~{next.maxT}°C</span>
+          <span className="px-2 py-0.5 rounded bg-leaf-50">預報 {next.minT}~{next.maxT}°C</span>
           <span className="px-2 py-0.5 rounded bg-leaf-50">降雨機率 {next.pop}%</span>
         </div>
       )}

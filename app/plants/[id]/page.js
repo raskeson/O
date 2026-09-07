@@ -19,6 +19,8 @@ export default function PlantDetail() {
   const [showRepot, setShowRepot] = useState(false);
   const [showBreed, setShowBreed] = useState(false);
   const [showSplit, setShowSplit] = useState(false);
+  const [showDeathForm, setShowDeathForm] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
   const [editMode, setEditMode] = useState(false);
 
   const load = useCallback(async () => {
@@ -111,8 +113,11 @@ export default function PlantDetail() {
 
   async function handleSplit(rows) {
     const row = rows[0];
+    const ratio = row.price_option === "full" ? 1 : row.price_option === "half" ? 0.5 : 0;
+    const inheritedValue = plant.estimated_value ? Math.round(Number(plant.estimated_value) * ratio) : 0;
+    const finalName = row.price_option === "half" ? `${row.name}小株` : row.name;
     await supabase.from("plants").insert({
-      name: row.name,
+      name: finalName,
       species: plant.species,
       custom_species: plant.custom_species,
       field_id: plant.field_id,
@@ -120,6 +125,7 @@ export default function PlantDetail() {
       acquired_date: new Date().toISOString().slice(0, 10),
       status: "alive",
       cost: 0, // 切盆拆分預設 0 成本
+      estimated_value: inheritedValue,
       pot_diameter: row.pot_diameter ? Number(row.pot_diameter) : null,
       pot_unit: row.pot_unit || "cm",
       care_note: plant.care_note,
@@ -135,10 +141,11 @@ export default function PlantDetail() {
     load();
   }
 
-  async function handleMarkDead() {
-    if (!confirm(`確定要將「${plant.name}」標記為死亡嗎？標記後會移到「已淘汰」清單。`)) return;
-    await supabase.from("plants").update({ status: "dead" }).eq("id", id);
-    await supabase.from("plant_events").insert({ plant_id: id, type: "death" });
+  async function handleMarkDead(rows) {
+    const row = rows[0];
+    await supabase.from("plants").update({ status: "dead", death_reason: row.death_reason || null }).eq("id", id);
+    await supabase.from("plant_events").insert({ plant_id: id, type: "death", note: row.death_reason || null });
+    setShowDeathForm(false);
     load();
   }
 
@@ -195,6 +202,20 @@ export default function PlantDetail() {
     load();
   }
 
+  async function handleAddManualEvent(rows) {
+    const row = rows[0];
+    if (!row.title) return;
+    await supabase.from("plant_events").insert({
+      plant_id: id,
+      type: "manual",
+      detail: { label: row.title },
+      event_date: row.event_date || new Date().toISOString().slice(0, 10),
+      note: row.note || null,
+    });
+    setShowAddEvent(false);
+    load();
+  }
+
   if (!plant) return <div className="text-sm text-gray-500">載入中...</div>;
 
   const fieldName = fields.find((f) => f.id === plant.field_id)?.name;
@@ -239,6 +260,7 @@ export default function PlantDetail() {
           <Stat label="取得日期" value={plant.acquired_date || "-"} />
           <Stat label="性質" value={plant.care_note || "未設定"} />
           {plant.status === "alive" && <Stat label="澆水狀態" value={`💧 ${waterUrgency(plant).label}`} />}
+          {plant.status === "dead" && <Stat label="死亡原因" value={plant.death_reason || "未填寫"} />}
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
@@ -257,7 +279,7 @@ export default function PlantDetail() {
             🌸 配種／登記血統
           </button>
           {plant.status === "alive" && (
-            <button className="btn-danger" onClick={handleMarkDead}>
+            <button className="btn-danger" onClick={() => setShowDeathForm(true)}>
               🥀 標記死亡
             </button>
           )}
@@ -304,12 +326,17 @@ export default function PlantDetail() {
       </div>
 
       <div className="card">
-        <h2 className="font-bold text-leaf-900 mb-2">事件歷程</h2>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-bold text-leaf-900">事件歷程</h2>
+          <button className="btn-secondary text-xs px-2 py-1" onClick={() => setShowAddEvent(true)}>
+            ＋ 手動新增紀錄
+          </button>
+        </div>
         <div className="text-sm space-y-2">
           {events.map((e) => (
             <div key={e.id} className="border-b border-leaf-100 pb-1">
               <span className="text-gray-400 mr-2">{e.event_date}</span>
-              <span className="font-medium">{eventLabel(e.type)}</span>
+              <span className="font-medium">{eventLabel(e)}</span>
               {e.note && <span className="text-gray-500 ml-2">{e.note}</span>}
             </div>
           ))}
@@ -341,9 +368,21 @@ export default function PlantDetail() {
 
       {showSplit && (
         <BatchTableForm
-          title={`切盆拆分：${plant.name}（新植株成本自動設為 0）`}
+          title={`切盆拆分：${plant.name}（目前市價 ${formatMoney(plant.estimated_value)}，成本自動設為 0）`}
           columns={[
             { key: "name", label: "新植株名稱", required: true, width: 140 },
+            {
+              key: "price_option",
+              label: "延續市價方式",
+              type: "select",
+              required: true,
+              options: [
+                { value: "full", label: `全價（延續 ${formatMoney(plant.estimated_value)}）` },
+                { value: "half", label: `1/2 價（約 ${formatMoney(Math.round((Number(plant.estimated_value) || 0) / 2))}，名稱自動加「小株」）` },
+                { value: "none", label: "不延續（市價 $0）" },
+              ],
+              width: 220,
+            },
             { key: "pot_diameter", label: "盆徑", type: "number", width: 90 },
             { key: "pot_unit", label: "單位", type: "select", options: POT_UNITS.map((u) => ({ value: u, label: u })), width: 90 },
             { key: "note", label: "備註", width: 200 },
@@ -376,6 +415,30 @@ export default function PlantDetail() {
           onSubmit={handleBreed}
           onClose={() => setShowBreed(false)}
           submitLabel="登記配種結果"
+        />
+      )}
+
+      {showDeathForm && (
+        <BatchTableForm
+          title={`標記死亡：${plant.name}`}
+          columns={[{ key: "death_reason", label: "死亡原因（選填，會直接顯示在植物卡片上）", type: "textarea", width: 220 }]}
+          onSubmit={handleMarkDead}
+          onClose={() => setShowDeathForm(false)}
+          submitLabel="確認標記死亡"
+        />
+      )}
+
+      {showAddEvent && (
+        <BatchTableForm
+          title={`手動新增紀錄：${plant.name}`}
+          columns={[
+            { key: "title", label: "事件名稱（例如：噴藥、施肥、剪枝）", required: true, width: 160 },
+            { key: "event_date", label: "日期", type: "date", width: 150 },
+            { key: "note", label: "備註", type: "textarea", width: 220 },
+          ]}
+          onSubmit={handleAddManualEvent}
+          onClose={() => setShowAddEvent(false)}
+          submitLabel="新增紀錄"
         />
       )}
 
@@ -415,6 +478,9 @@ function Stat({ label, value }) {
   );
 }
 
-function eventLabel(type) {
-  return { repot: "🪴 換盆", move: "🚚 搬家", split: "✂️ 切盆拆分", breed: "🌸 配種", sale: "💰 出售", death: "🥀 標記死亡" }[type] || type;
+function eventLabel(e) {
+  if (e.type === "manual") return `📝 ${e.detail?.label || "手動紀錄"}`;
+  return (
+    { repot: "🪴 換盆", move: "🚚 搬家", split: "✂️ 切盆拆分", breed: "🌸 配種", sale: "💰 出售", death: "🥀 標記死亡" }[e.type] || e.type
+  );
 }
