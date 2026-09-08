@@ -119,10 +119,16 @@ create table if not exists compost_materials (
   bin_id uuid references compost_bins(id) on delete cascade,
   name text not null,
   weight numeric not null,
-  carbon_pct numeric not null,
-  nitrogen_pct numeric not null,
+  cn_ratio numeric not null, -- 碳氮比，例如 30 代表 30:1（取代原本的 carbon_pct/nitrogen_pct 兩個%欄位）
   added_at date default current_date
 );
+
+-- 如果是既有資料庫要升級，手動執行以下語句：
+-- alter table compost_materials add column if not exists cn_ratio numeric;
+-- update compost_materials set cn_ratio = carbon_pct / nullif(nitrogen_pct, 0) where cn_ratio is null;
+-- alter table compost_materials alter column cn_ratio set not null;
+-- alter table compost_materials drop column if exists carbon_pct;
+-- alter table compost_materials drop column if exists nitrogen_pct;
 
 -- 系統設定（用於「一鍵開啟託管模式」開關）
 create table if not exists app_settings (

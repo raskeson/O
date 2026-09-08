@@ -46,30 +46,44 @@ export default function CompostPage() {
   const materialColumns = [
     {
       key: "preset",
-      label: "材料（可選預設或自訂後修改右側%）",
+      label: "材料（可選預設或自訂後修改右側碳氮比）",
       type: "select",
       options: COMPOST_MATERIAL_PRESETS.map((p) => ({ value: p.name, label: p.name })),
       width: 180,
     },
     { key: "name", label: "材料名稱（自訂）", width: 140 },
     { key: "weight", label: "重量(kg)", type: "number", required: true, width: 90 },
-    { key: "carbon_pct", label: "碳含量%", type: "number", width: 90 },
-    { key: "nitrogen_pct", label: "氮含量%", type: "number", width: 90 },
+    { key: "cn_ratio", label: "碳氮比 C:N（例如 30 或 30:1）", type: "text", placeholder: "30:1", width: 130 },
   ];
+
+  // 解析「30」「30:1」「30比1」這類輸入，回傳單一數字（N 那邊視為 1）
+  function parseCnRatio(input) {
+    if (input === "" || input == null) return null;
+    const str = String(input).trim().replace("比", ":").replace("：", ":");
+    const parts = str.split(":");
+    const num = Number(parts[0]);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    if (parts.length > 1) {
+      const denom = Number(parts[1]);
+      if (Number.isFinite(denom) && denom > 0) return num / denom;
+    }
+    return num;
+  }
 
   async function handleAddMaterial(rows) {
     const payload = rows
       .filter((r) => r.weight)
       .map((r) => {
         const preset = COMPOST_MATERIAL_PRESETS.find((p) => p.name === r.preset);
+        const parsed = parseCnRatio(r.cn_ratio);
         return {
           bin_id: materialTarget.id,
           name: r.name || r.preset || "未命名材料",
           weight: Number(r.weight),
-          carbon_pct: r.carbon_pct !== "" && r.carbon_pct != null ? Number(r.carbon_pct) : preset?.carbon_pct || 0,
-          nitrogen_pct: r.nitrogen_pct !== "" && r.nitrogen_pct != null ? Number(r.nitrogen_pct) : preset?.nitrogen_pct || 0,
+          cn_ratio: parsed != null ? parsed : preset?.cn_ratio || 0,
         };
-      });
+      })
+      .filter((p) => p.cn_ratio > 0);
     if (!payload.length) return;
     await supabase.from("compost_materials").insert(payload);
     setMaterialTarget(null);
@@ -160,7 +174,7 @@ export default function CompostPage() {
                 {binMaterials.map((m) => (
                   <div key={m.id} className="flex justify-between border-b border-leaf-100 pb-0.5">
                     <span>
-                      {m.name}・{m.weight}kg・C{m.carbon_pct}% N{m.nitrogen_pct}%
+                      {m.name}・{m.weight}kg・C:N {m.cn_ratio}:1
                     </span>
                     <button className="text-red-500" onClick={() => handleDeleteMaterial(m)}>
                       移除
