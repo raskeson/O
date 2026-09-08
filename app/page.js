@@ -5,7 +5,7 @@ import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS } from "@/lib/constants";
 import PlantCard from "@/components/PlantCard";
 import BatchTableForm from "@/components/BatchTableForm";
 import ImportCsvModal from "@/components/ImportCsvModal";
-import { formatMoney, waterUrgency } from "@/lib/utils";
+import { formatMoney, waterUrgency, speciesLabel } from "@/lib/utils";
 
 export default function Dashboard() {
   const [plants, setPlants] = useState([]);
@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [moveTarget, setMoveTarget] = useState(null);
   const [sellTarget, setSellTarget] = useState(null);
   const [filterField, setFilterField] = useState("");
+  const [filterSpecies, setFilterSpecies] = useState("");
   const [filterStatus, setFilterStatus] = useState("alive");
   const [sellerFilter, setSellerFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -63,6 +64,12 @@ export default function Dashboard() {
 
   const fieldMap = useMemo(() => Object.fromEntries(fields.map((f) => [f.id, f.name])), [fields]);
 
+  // 種類選單：用「顯示用的種類」去重（自訂種類會顯示自訂名稱而非「其他（自訂）」）
+  const speciesList = useMemo(() => {
+    const set = new Set(plants.map((p) => speciesLabel(p)));
+    return [...set].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  }, [plants]);
+
   // 今天該澆水（含已逾期）的健在植株
   const dueToWater = useMemo(
     () => plants.filter((p) => p.status === "alive" && ["overdue", "today"].includes(waterUrgency(p).level)),
@@ -99,6 +106,7 @@ export default function Dashboard() {
 
   const filtered = plants.filter((p) => {
     if (filterField && p.field_id !== filterField) return false;
+    if (filterSpecies && speciesLabel(p) !== filterSpecies) return false;
     if (filterStatus && p.status !== filterStatus) return false;
     if (sellerFilter && p.seller !== sellerFilter) return false;
     if (search.trim()) {
@@ -374,6 +382,14 @@ export default function Dashboard() {
           {fields.map((f) => (
             <option key={f.id} value={f.id}>
               {f.name}
+            </option>
+          ))}
+        </select>
+        <select className="input w-36" value={filterSpecies} onChange={(e) => setFilterSpecies(e.target.value)}>
+          <option value="">所有種類</option>
+          {speciesList.map((s) => (
+            <option key={s} value={s}>
+              {s}
             </option>
           ))}
         </select>
