@@ -46,6 +46,21 @@ export default function CustodyPage() {
     load();
   }
 
+  async function markAllWatered() {
+    if (!plants.length) return;
+    if (!confirm(`確定要把全部 ${plants.length} 盆植物都標記為今天已澆水嗎？`)) return;
+    const ids = plants.map((p) => p.id);
+    const { error } = await supabase
+      .from("plants")
+      .update({ last_watered: new Date().toISOString().slice(0, 10) })
+      .in("id", ids);
+    if (error) {
+      alert("澆水失敗：" + error.message);
+      return;
+    }
+    load();
+  }
+
   const fieldMap = Object.fromEntries(fields.map((f) => [f.id, f.name]));
   const sorted = [...plants].sort((a, b) => {
     const ua = urgencyOrder[waterUrgency(a).level];
@@ -70,30 +85,44 @@ export default function CustodyPage() {
       {!enabled ? (
         <div className="card text-sm text-gray-500">目前託管模式未開啟，託管清單暫不顯示。屋主外出前請按上方按鈕開啟。</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {sorted.map((p) => {
-            const urgency = waterUrgency(p);
-            return (
-              <div key={p.id} className={`rounded-xl border p-3 ${urgencyColor[urgency.level]}`}>
-                <div className="font-semibold">{p.name}</div>
-                <div className="text-xs opacity-80">
-                  {speciesLabel(p)}・場域：{fieldMap[p.field_id] || "未設定"}・盆栽：{potSizeLabel(p)}
+        <>
+          <button
+            onClick={markAllWatered}
+            disabled={!sorted.length}
+            className={`w-full text-lg font-bold rounded-2xl py-4 shadow-sm border transition ${
+              sorted.length
+                ? "bg-blue-500 hover:bg-blue-600 text-white border-blue-500"
+                : "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed"
+            }`}
+          >
+            💧 一鍵全部澆水（{sorted.length} 盆全部標記完成）
+          </button>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {sorted.map((p) => {
+              const urgency = waterUrgency(p);
+              return (
+                <div key={p.id} className={`rounded-xl border p-3 ${urgencyColor[urgency.level]}`}>
+                  <div className="font-semibold">{p.name}</div>
+                  <div className="text-xs opacity-80">
+                    {speciesLabel(p)}・場域：{fieldMap[p.field_id] || "未設定"}・盆栽：{potSizeLabel(p)}
+                  </div>
+                  <div className="text-sm mt-1 font-medium">💧 {urgency.label}</div>
+                  {p.care_note && <div className="text-xs mt-1">🌿 性質：{p.care_note}</div>}
+                  {urgency.level !== "done" && (
+                    <button
+                      onClick={() => markWatered(p.id)}
+                      className="mt-2 w-full text-sm font-medium bg-white/70 hover:bg-white border border-current rounded-lg py-1.5"
+                    >
+                      💧 一鍵澆水
+                    </button>
+                  )}
                 </div>
-                <div className="text-sm mt-1 font-medium">💧 {urgency.label}</div>
-                {p.care_note && <div className="text-xs mt-1">🌿 性質：{p.care_note}</div>}
-                {urgency.level !== "done" && (
-                  <button
-                    onClick={() => markWatered(p.id)}
-                    className="mt-2 w-full text-sm font-medium bg-white/70 hover:bg-white border border-current rounded-lg py-1.5"
-                  >
-                    💧 一鍵澆水
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          {!sorted.length && <div className="text-gray-400 text-sm">目前沒有健在的植物需要照顧</div>}
-        </div>
+              );
+            })}
+            {!sorted.length && <div className="text-gray-400 text-sm">目前沒有健在的植物需要照顧</div>}
+          </div>
+        </>
       )}
     </div>
   );

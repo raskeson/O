@@ -103,12 +103,13 @@ export default function Dashboard() {
   // 已實現純利：實際發生的財務紀錄（出售+其他收入 - 購入+其他支出）
   const summary = useMemo(() => {
     const alive = plants.filter((p) => ALIVE_STATUSES.includes(p.status));
+    const dead = plants.filter((p) => p.status === "dead");
     const totalInvested = alive.reduce((s, p) => s + (Number(p.cost) || 0), 0);
     const totalMarketValue = alive.reduce((s, p) => s + (Number(p.estimated_value) || 0), 0);
     const s = { purchase: 0, sale: 0, expense: 0, income: 0 };
     financeEntries.forEach((e) => (s[e.type] = (s[e.type] || 0) + Number(e.amount)));
     const realizedProfit = s.sale + s.income - s.purchase - s.expense;
-    return { totalInvested, totalMarketValue, realizedProfit };
+    return { totalInvested, totalMarketValue, realizedProfit, aliveCount: alive.length, deadCount: dead.length };
   }, [plants, financeEntries]);
 
   const filtered = plants.filter((p) => {
@@ -376,7 +377,15 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+        <div className="card">
+          <div className="text-xs text-gray-500">目前在庫（不含死亡）</div>
+          <div className="font-bold text-lg text-leaf-900">{summary.aliveCount} 盆</div>
+        </div>
+        <div className="card">
+          <div className="text-xs text-gray-500">死傷數量</div>
+          <div className="font-bold text-lg text-red-600">{summary.deadCount} 盆</div>
+        </div>
         <div className="card">
           <div className="text-xs text-gray-500">總投入金額（健在植株）</div>
           <div className="font-bold text-lg text-leaf-900">{formatMoney(summary.totalInvested)}</div>
