@@ -10,29 +10,35 @@ import { formatMoney, waterUrgency } from "@/lib/utils";
 export default function Dashboard() {
   const [plants, setPlants] = useState([]);
   const [fields, setFields] = useState([]);
+  const [sellers, setSellers] = useState([]);
   const [covers, setCovers] = useState({});
   const [financeEntries, setFinanceEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showAddSeller, setShowAddSeller] = useState(false);
+  const [showImportSellers, setShowImportSellers] = useState(false);
   const [moveTarget, setMoveTarget] = useState(null);
   const [sellTarget, setSellTarget] = useState(null);
   const [filterField, setFilterField] = useState("");
   const [filterStatus, setFilterStatus] = useState("alive");
+  const [sellerFilter, setSellerFilter] = useState("");
   const [search, setSearch] = useState("");
   const [configError, setConfigError] = useState(false);
 
   async function loadAll() {
     setLoading(true);
-    const [{ data: p, error: pe }, { data: f }, { data: fin }] = await Promise.all([
+    const [{ data: p, error: pe }, { data: f }, { data: fin }, { data: sl }] = await Promise.all([
       supabase.from("plants").select("*").order("created_at", { ascending: false }),
       supabase.from("fields").select("*"),
       supabase.from("finance_entries").select("type,amount"),
+      supabase.from("sellers").select("*").order("name"),
     ]);
     if (pe) setConfigError(true);
     setPlants(p || []);
     setFields(f || []);
     setFinanceEntries(fin || []);
+    setSellers(sl || []);
     if (p && p.length) {
       const { data: photos } = await supabase
         .from("plant_photos")
@@ -94,6 +100,7 @@ export default function Dashboard() {
   const filtered = plants.filter((p) => {
     if (filterField && p.field_id !== filterField) return false;
     if (filterStatus && p.status !== filterStatus) return false;
+    if (sellerFilter && p.seller !== sellerFilter) return false;
     if (search.trim()) {
       const kw = search.trim().toLowerCase();
       const hit = p.name?.toLowerCase().includes(kw) || p.tag_uid?.toLowerCase().includes(kw);
@@ -108,6 +115,13 @@ export default function Dashboard() {
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類(選其他時填)", width: 140 },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
+    {
+      key: "seller",
+      label: sellers.length ? "賣家/來源（如清單沒有，先按上方「＋新增賣家」）" : "賣家/來源（尚未建立賣家，請先按上方「＋新增賣家」）",
+      type: "select",
+      options: sellers.map((s) => ({ value: s.name, label: s.name })),
+      width: 140,
+    },
     { key: "acquired_date", label: "取得日期", type: "date", width: 150 },
     { key: "cost", label: "購入成本", type: "number", width: 100 },
     { key: "pot_diameter", label: "盆徑", type: "number", width: 90 },
@@ -122,6 +136,15 @@ export default function Dashboard() {
     const { data, error } = await supabase.from("plants").insert(payload).select();
     if (error) {
       return { message: "新增失敗：" + error.message, error: true, count: 0 };
+    }
+    const created = data || [];
+    // 自動把出現過的賣家加入賣家清單，之後可在「依賣家查看」用到（比照資材庫存的作法）
+    const sellerNames = [...new Set(created.map((p) => p.seller).filter(Boolean))];
+    if (sellerNames.length) {
+      await supabase.from("sellers").upsert(
+        sellerNames.map((name) => ({ name })),
+        { onConflict: "name", ignoreDuplicates: true }
+      );
     }
     // 有成本則同步寫入財務總帳
     const financeRows = (data || [])
@@ -141,6 +164,7 @@ export default function Dashboard() {
         species: r.species || null,
         custom_species: r.custom_species || null,
         field_id: r.field_id || null,
+        seller: r.seller || null,
         acquired_date: r.acquired_date || null,
         cost: r.cost ? Number(r.cost) : 0,
         pot_diameter: r.pot_diameter ? Number(r.pot_diameter) : null,
@@ -155,14 +179,14 @@ export default function Dashboard() {
   }
 
   const importColumns = [
-    "name", "tag_uid", "species", "custom_species", "field_name", "acquired_date",
+    "name", "tag_uid", "species", "custom_species", "field_name", "seller", "acquired_date",
     "cost", "estimated_value", "pot_diameter", "pot_unit", "water_frequency_days",
     "care_note", "status", "notes",
   ];
   const importExample = [
-    "薄荷", "", "香草類", "", "後陽台", "2026-01-15",
+    "薄荷", "", "香草類", "", "後陽台", "丁（旋轉花市）", "2026-01-15",
     "60", "80", "5", "吋", "3",
-    "喜濕", "alive", "來源：丁（旋轉花市）",
+    "喜濕", "alive", "",
   ];
 
   async function handleImportPlants(csvRows) {
@@ -183,6 +207,7 @@ export default function Dashboard() {
           species: r.species?.trim() || null,
           custom_species: r.custom_species?.trim() || null,
           field_id: fieldId,
+          seller: r.seller?.trim() || null,
           acquired_date: r.acquired_date?.trim() || null,
           cost: r.cost ? Number(r.cost) || 0 : 0,
           estimated_value: r.estimated_value ? Number(r.estimated_value) || 0 : 0,
@@ -200,6 +225,38 @@ export default function Dashboard() {
     if (res.financeCount) message += `，其中 ${res.financeCount} 筆有購入成本，已同步記入財務總帳`;
     if (unmatchedField) message += `。有 ${unmatchedField} 筆的「場域」名稱在系統裡找不到對應場域，已設為未設定，之後可以用「搬家」功能手動指定`;
     return { message: message + "。" };
+  }
+
+  async function handleAddSeller(rows) {
+    const payload = rows.filter((r) => r.name).map((r) => ({ name: r.name, notes: r.notes || null }));
+    if (!payload.length) return;
+    const { error } = await supabase.from("sellers").upsert(payload, { onConflict: "name" });
+    if (error) {
+      alert("新增賣家失敗：" + error.message);
+      return;
+    }
+    loadAll();
+  }
+
+  const sellerImportColumns = ["name", "notes"];
+  const sellerImportExample = ["南屯花市", "較貴、品種多"];
+
+  async function handleImportSellers(csvRows) {
+    const payload = csvRows
+      .filter((r) => r.name && r.name.trim())
+      .map((r) => ({ name: r.name.trim(), notes: r.notes?.trim() || null }));
+    if (!payload.length) return { message: "沒有可匯入的資料（請確認名稱欄位不是空的）。", error: true };
+    const { error } = await supabase.from("sellers").upsert(payload, { onConflict: "name" });
+    if (error) return { message: "匯入賣家失敗：" + error.message, error: true };
+    loadAll();
+    return { message: `成功匯入/更新 ${payload.length} 位賣家。` };
+  }
+
+  async function handleDeleteSeller(seller) {
+    if (!confirm(`確定刪除賣家「${seller.name}」？（已使用此賣家的植物紀錄不會被刪除）`)) return;
+    await supabase.from("sellers").delete().eq("id", seller.id);
+    if (sellerFilter === seller.name) setSellerFilter("");
+    loadAll();
   }
 
   async function handleMove(rows) {
@@ -279,6 +336,12 @@ export default function Dashboard() {
           <button className="btn-secondary" onClick={() => setShowImport(true)}>
             📥 匯入 CSV
           </button>
+          <button className="btn-secondary" onClick={() => setShowAddSeller(true)}>
+            ＋ 新增賣家
+          </button>
+          <button className="btn-secondary" onClick={() => setShowImportSellers(true)}>
+            📥 匯入賣家 CSV
+          </button>
         </div>
       </div>
 
@@ -322,6 +385,25 @@ export default function Dashboard() {
             </option>
           ))}
         </select>
+        <select className="input w-40" value={sellerFilter} onChange={(e) => setSellerFilter(e.target.value)}>
+          <option value="">所有賣家/來源</option>
+          {sellers.map((s) => (
+            <option key={s.id} value={s.name}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+        {sellerFilter && (
+          <button
+            className="text-red-500 text-xs"
+            onClick={() => {
+              const s = sellers.find((x) => x.name === sellerFilter);
+              if (s) handleDeleteSeller(s);
+            }}
+          >
+            🗑 刪除此賣家
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -399,6 +481,29 @@ export default function Dashboard() {
           exampleRow={importExample}
           onImport={handleImportPlants}
           onClose={() => setShowImport(false)}
+        />
+      )}
+
+      {showAddSeller && (
+        <BatchTableForm
+          title="新增/更新賣家（同名會更新備註）"
+          columns={[
+            { key: "name", label: "賣家名稱", required: true, width: 140 },
+            { key: "notes", label: "備註（例如：CP值低、出貨快）", type: "textarea", width: 200 },
+          ]}
+          onSubmit={handleAddSeller}
+          onClose={() => setShowAddSeller(false)}
+          submitLabel="全部儲存"
+        />
+      )}
+
+      {showImportSellers && (
+        <ImportCsvModal
+          title="匯入賣家 CSV"
+          templateColumns={sellerImportColumns}
+          exampleRow={sellerImportExample}
+          onImport={handleImportSellers}
+          onClose={() => setShowImportSellers(false)}
         />
       )}
     </div>

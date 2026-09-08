@@ -44,6 +44,7 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
           </div>
           <div className="text-xs text-gray-500 truncate">{speciesLabel(plant)}</div>
           <div className="text-xs text-gray-500">場域：{fieldName || "未設定"}</div>
+          {plant.seller && <div className="text-xs text-gray-500">賣家/來源：{plant.seller}</div>}
           <div className="text-xs text-gray-500">盆栽：{potSizeLabel(plant)}</div>
           <div className="text-xs text-gray-700 mt-0.5">
             購入 {formatMoney(plant.cost)}　市價 {formatMoney(plant.estimated_value)}

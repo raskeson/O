@@ -230,3 +230,9 @@ create policy "allow all sellers" on sellers for all using (true) with check (tr
 -- 更新：死亡原因欄位
 -- ============================================
 alter table plants add column if not exists death_reason text;
+
+-- ============================================
+-- 更新：植物的賣家/來源欄位（比照資材庫存的作法，存文字，
+-- 新增/匯入植物時若出現新的賣家名稱，會自動加進 sellers 清單）
+-- ============================================
+alter table plants add column if not exists seller text;

@@ -9,6 +9,7 @@ const links = [
   { href: "/inventory", label: "資材/肥料" },
   { href: "/compost", label: "堆肥監測" },
   { href: "/custody", label: "出差託管" },
+  { href: "/settings", label: "系統設定" },
 ];
 
 export default function Nav() {

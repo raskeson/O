@@ -12,6 +12,7 @@ export default function PlantDetail() {
   const router = useRouter();
   const [plant, setPlant] = useState(null);
   const [fields, setFields] = useState([]);
+  const [sellers, setSellers] = useState([]);
   const [allPlants, setAllPlants] = useState([]);
   const [photos, setPhotos] = useState([]);
   const [events, setEvents] = useState([]);
@@ -26,14 +27,16 @@ export default function PlantDetail() {
   const load = useCallback(async () => {
     const { data: pl } = await supabase.from("plants").select("*").eq("id", id).single();
     setPlant(pl);
-    const [{ data: f }, { data: ap }, { data: ph }, { data: ev }, { data: inv }] = await Promise.all([
+    const [{ data: f }, { data: sl }, { data: ap }, { data: ph }, { data: ev }, { data: inv }] = await Promise.all([
       supabase.from("fields").select("*"),
+      supabase.from("sellers").select("*").order("name"),
       supabase.from("plants").select("id,name").neq("id", id),
       supabase.from("plant_photos").select("*").eq("plant_id", id).order("taken_at", { ascending: false }),
       supabase.from("plant_events").select("*").eq("plant_id", id).order("event_date", { ascending: false }),
       supabase.from("inventory_items").select("*"),
     ]);
     setFields(f || []);
+    setSellers(sl || []);
     setAllPlants(ap || []);
     setPhotos(ph || []);
     setEvents(ev || []);
@@ -174,6 +177,13 @@ export default function PlantDetail() {
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類", width: 140 },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
+    {
+      key: "seller",
+      label: sellers.length ? "賣家/來源（如清單沒有，先到植物圖鑑頁「＋新增賣家」）" : "賣家/來源（尚未建立賣家）",
+      type: "select",
+      options: sellers.map((s) => ({ value: s.name, label: s.name })),
+      width: 140,
+    },
     { key: "status", label: "狀態", type: "select", options: PLANT_STATUS, width: 100 },
     { key: "water_frequency_days", label: "澆水頻率(天)", type: "number", width: 110 },
     { key: "care_note", label: "性質備註", width: 160 },
@@ -191,6 +201,7 @@ export default function PlantDetail() {
         species: row.species || null,
         custom_species: row.custom_species || null,
         field_id: row.field_id || null,
+        seller: row.seller || null,
         status: row.status || "alive",
         water_frequency_days: row.water_frequency_days ? Number(row.water_frequency_days) : null,
         care_note: row.care_note || null,
@@ -198,6 +209,9 @@ export default function PlantDetail() {
         notes: row.notes || null,
       })
       .eq("id", id);
+    if (row.seller) {
+      await supabase.from("sellers").upsert({ name: row.seller }, { onConflict: "name", ignoreDuplicates: true });
+    }
     setEditMode(false);
     load();
   }
@@ -258,6 +272,7 @@ export default function PlantDetail() {
           <Stat label="購入成本" value={formatMoney(plant.cost)} />
           <Stat label="估計市價" value={formatMoney(plant.estimated_value)} />
           <Stat label="取得日期" value={plant.acquired_date || "-"} />
+          <Stat label="賣家/來源" value={plant.seller || "未設定"} />
           <Stat label="性質" value={plant.care_note || "未設定"} />
           {plant.status === "alive" && <Stat label="澆水狀態" value={`💧 ${waterUrgency(plant).label}`} />}
           {plant.status === "dead" && <Stat label="死亡原因" value={plant.death_reason || "未填寫"} />}
@@ -453,6 +468,7 @@ export default function PlantDetail() {
               species: plant.species,
               custom_species: plant.custom_species,
               field_id: plant.field_id,
+              seller: plant.seller,
               status: plant.status,
               water_frequency_days: plant.water_frequency_days,
               care_note: plant.care_note,
