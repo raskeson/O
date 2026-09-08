@@ -3,6 +3,12 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 const CONFIRM_PHRASE = "刪除所有資料";
+// 刪除密碼：從環境變數讀取，請在 .env.local（或部署平台的環境變數設定）裡設定
+// NEXT_PUBLIC_DELETE_PASSWORD=你自訂的密碼
+// 注意：因為是純前端專案，這只能擋住不知道密碼的測試者手滑誤刪，
+// 不是真正的後端驗證，懂得打開瀏覽器開發者工具看原始碼的人還是看得到密碼，
+// 如果資料非常重要，建議另外定期備份。
+const DELETE_PASSWORD = process.env.NEXT_PUBLIC_DELETE_PASSWORD || "";
 
 // 依「先刪子表、再刪父表」的順序，把所有資料表清空。
 // Supabase 的 delete() 一定要搭配 filter，這裡用「不等於一個不可能出現的值」
@@ -25,10 +31,12 @@ const TABLES_IN_ORDER = [
 
 export default function SettingsPage() {
   const [confirmText, setConfirmText] = useState("");
+  const [password, setPassword] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [result, setResult] = useState(null);
 
-  const canDelete = confirmText.trim() === CONFIRM_PHRASE;
+  const passwordOk = DELETE_PASSWORD ? password === DELETE_PASSWORD : true;
+  const canDelete = confirmText.trim() === CONFIRM_PHRASE && passwordOk;
 
   async function handleDeleteAll() {
     if (!canDelete) return;
@@ -45,6 +53,7 @@ export default function SettingsPage() {
     }
     setDeleting(false);
     setConfirmText("");
+    setPassword("");
     if (errors.length) {
       setResult({ error: true, message: "部分資料刪除失敗：\n" + errors.join("\n") });
     } else {
@@ -72,6 +81,25 @@ export default function SettingsPage() {
           onChange={(e) => setConfirmText(e.target.value)}
           placeholder={CONFIRM_PHRASE}
         />
+
+        {DELETE_PASSWORD ? (
+          <>
+            <label className="block text-sm text-red-700 mb-1">請輸入刪除密碼：</label>
+            <input
+              className="input w-full mb-3"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="密碼"
+            />
+          </>
+        ) : (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">
+            尚未設定刪除密碼，目前任何人只要打對上面那句話就能刪除全部資料。若要開放給別人測試，
+            建議到 .env.local（或部署平台的環境變數）加上 NEXT_PUBLIC_DELETE_PASSWORD=你的密碼，再重新部署。
+          </p>
+        )}
+
         <button
           className={`btn-danger ${!canDelete || deleting ? "opacity-50 cursor-not-allowed" : ""}`}
           onClick={handleDeleteAll}
