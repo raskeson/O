@@ -26,6 +26,24 @@ export default function FinancePage() {
 
   const plantMap = Object.fromEntries(plants.map((p) => [p.id, p.name]));
 
+  const [typeFilter, setTypeFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+
+  const categories = useMemo(
+    () => [...new Set(entries.map((e) => e.category).filter(Boolean))].sort(),
+    [entries]
+  );
+
+  const filteredEntries = useMemo(
+    () =>
+      entries.filter((e) => {
+        if (typeFilter && e.type !== typeFilter) return false;
+        if (categoryFilter && e.category !== categoryFilter) return false;
+        return true;
+      }),
+    [entries, typeFilter, categoryFilter]
+  );
+
   const summary = useMemo(() => {
     const s = { purchase: 0, sale: 0, expense: 0, income: 0 };
     entries.forEach((e) => (s[e.type] = (s[e.type] || 0) + Number(e.amount)));
@@ -110,10 +128,50 @@ export default function FinancePage() {
       </div>
 
       <div>
-        <h2 className="font-bold text-leaf-900 mb-2">明細</h2>
-        {entries.length ? (
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <h2 className="font-bold text-leaf-900">明細</h2>
+          <div className="flex gap-2 flex-wrap items-center text-sm">
+            <span className="text-gray-500">依類型：</span>
+            <select className="input w-32" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+              <option value="">全部類型</option>
+              {FINANCE_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-gray-500">依分類：</span>
+            <select className="input w-36" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="">全部分類</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            {(typeFilter || categoryFilter) && (
+              <button
+                className="text-xs text-red-500"
+                onClick={() => {
+                  setTypeFilter("");
+                  setCategoryFilter("");
+                }}
+              >
+                清除篩選
+              </button>
+            )}
+          </div>
+        </div>
+
+        {(typeFilter || categoryFilter) && (
+          <div className="text-sm text-leaf-700 mb-2">
+            篩選結果：{filteredEntries.length} 筆，合計 {formatMoney(filteredEntries.reduce((s, e) => s + Number(e.amount), 0))}
+          </div>
+        )}
+
+        {filteredEntries.length ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {entries.map((e) => {
+            {filteredEntries.map((e) => {
               const isIncome = e.type === "sale" || e.type === "income";
               return (
                 <div key={e.id} className="card flex flex-col gap-1">
@@ -145,7 +203,9 @@ export default function FinancePage() {
             })}
           </div>
         ) : (
-          <div className="card text-center text-gray-400 py-3">尚無資料</div>
+          <div className="card text-center text-gray-400 py-3">
+            {entries.length ? "沒有符合篩選條件的紀錄" : "尚無資料"}
+          </div>
         )}
       </div>
 

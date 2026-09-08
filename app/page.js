@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS } from "@/lib/constants";
 import PlantCard from "@/components/PlantCard";
 import BatchTableForm from "@/components/BatchTableForm";
+import ImportCsvModal from "@/components/ImportCsvModal";
 import { formatMoney, waterUrgency } from "@/lib/utils";
 
 export default function Dashboard() {
@@ -13,6 +14,7 @@ export default function Dashboard() {
   const [financeEntries, setFinanceEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [moveTarget, setMoveTarget] = useState(null);
   const [sellTarget, setSellTarget] = useState(null);
   const [filterField, setFilterField] = useState("");
@@ -115,6 +117,21 @@ export default function Dashboard() {
     { key: "estimated_value", label: "估計市價", type: "number", width: 100 },
   ];
 
+  async function insertPlantsAndFinance(payload) {
+    if (!payload.length) return { message: "沒有可匯入的資料（請確認名稱欄位不是空的）。", error: true, count: 0 };
+    const { data, error } = await supabase.from("plants").insert(payload).select();
+    if (error) {
+      return { message: "新增失敗：" + error.message, error: true, count: 0 };
+    }
+    // 有成本則同步寫入財務總帳
+    const financeRows = (data || [])
+      .filter((p) => p.cost)
+      .map((p) => ({ type: "purchase", plant_id: p.id, amount: p.cost, category: "購入成本", entry_date: p.acquired_date || new Date().toISOString().slice(0, 10) }));
+    if (financeRows.length) await supabase.from("finance_entries").insert(financeRows);
+    loadAll();
+    return { count: data?.length || 0, financeCount: financeRows.length };
+  }
+
   async function handleAddPlants(rows) {
     const payload = rows
       .filter((r) => r.name)
@@ -133,18 +150,56 @@ export default function Dashboard() {
         estimated_value: r.estimated_value ? Number(r.estimated_value) : 0,
         status: "alive",
       }));
-    if (!payload.length) return;
-    const { data, error } = await supabase.from("plants").insert(payload).select();
-    if (error) {
-      alert("新增失敗：" + error.message);
-      return;
-    }
-    // 有成本則同步寫入財務總帳
-    const financeRows = (data || [])
-      .filter((p) => p.cost)
-      .map((p) => ({ type: "purchase", plant_id: p.id, amount: p.cost, category: "購入成本", entry_date: p.acquired_date || new Date().toISOString().slice(0, 10) }));
-    if (financeRows.length) await supabase.from("finance_entries").insert(financeRows);
-    loadAll();
+    const res = await insertPlantsAndFinance(payload);
+    if (res.error) alert(res.message);
+  }
+
+  const importColumns = [
+    "name", "tag_uid", "species", "custom_species", "field_name", "acquired_date",
+    "cost", "estimated_value", "pot_diameter", "pot_unit", "water_frequency_days",
+    "care_note", "status", "notes",
+  ];
+  const importExample = [
+    "薄荷", "", "香草類", "", "後陽台", "2026-01-15",
+    "60", "80", "5", "吋", "3",
+    "喜濕", "alive", "來源：丁（旋轉花市）",
+  ];
+
+  async function handleImportPlants(csvRows) {
+    const fieldByName = new Map(fields.map((f) => [f.name.trim().toLowerCase(), f.id]));
+    let unmatchedField = 0;
+    const payload = csvRows
+      .filter((r) => r.name && r.name.trim())
+      .map((r) => {
+        let fieldId = null;
+        if (r.field_name && r.field_name.trim()) {
+          fieldId = fieldByName.get(r.field_name.trim().toLowerCase()) || null;
+          if (!fieldId) unmatchedField += 1;
+        }
+        const status = ["alive", "sold", "dead"].includes((r.status || "").trim()) ? r.status.trim() : "alive";
+        return {
+          name: r.name.trim(),
+          tag_uid: r.tag_uid?.trim() || null,
+          species: r.species?.trim() || null,
+          custom_species: r.custom_species?.trim() || null,
+          field_id: fieldId,
+          acquired_date: r.acquired_date?.trim() || null,
+          cost: r.cost ? Number(r.cost) || 0 : 0,
+          estimated_value: r.estimated_value ? Number(r.estimated_value) || 0 : 0,
+          pot_diameter: r.pot_diameter ? Number(r.pot_diameter) || null : null,
+          pot_unit: r.pot_unit?.trim() || "cm",
+          water_frequency_days: r.water_frequency_days ? Number(r.water_frequency_days) || null : null,
+          care_note: r.care_note?.trim() || null,
+          status,
+          notes: r.notes?.trim() || null,
+        };
+      });
+    const res = await insertPlantsAndFinance(payload);
+    if (res.error) return res;
+    let message = `成功匯入 ${res.count} 株植物`;
+    if (res.financeCount) message += `，其中 ${res.financeCount} 筆有購入成本，已同步記入財務總帳`;
+    if (unmatchedField) message += `。有 ${unmatchedField} 筆的「場域」名稱在系統裡找不到對應場域，已設為未設定，之後可以用「搬家」功能手動指定`;
+    return { message: message + "。" };
   }
 
   async function handleMove(rows) {
@@ -220,6 +275,9 @@ export default function Dashboard() {
           </button>
           <button className="btn-primary" onClick={() => setShowAdd(true)}>
             ＋ 新增植物（表格批次輸入）
+          </button>
+          <button className="btn-secondary" onClick={() => setShowImport(true)}>
+            📥 匯入 CSV
           </button>
         </div>
       </div>
@@ -331,6 +389,16 @@ export default function Dashboard() {
           onSubmit={handleMarkDead}
           onClose={() => setDeathTarget(null)}
           submitLabel="確認標記死亡"
+        />
+      )}
+
+      {showImport && (
+        <ImportCsvModal
+          title="匯入植物 CSV"
+          templateColumns={importColumns}
+          exampleRow={importExample}
+          onImport={handleImportPlants}
+          onClose={() => setShowImport(false)}
         />
       )}
     </div>

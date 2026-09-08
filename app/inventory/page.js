@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import BatchTableForm from "@/components/BatchTableForm";
+import ImportCsvModal from "@/components/ImportCsvModal";
 import { formatMoney, potVolumeLiters } from "@/lib/utils";
 import { POT_UNITS } from "@/lib/constants";
 
@@ -17,6 +18,8 @@ export default function InventoryPage() {
   const [showConvert, setShowConvert] = useState(false);
   const [sortBy, setSortBy] = useState("recent"); // recent | rating
   const [sellerFilter, setSellerFilter] = useState("");
+  const [showImportItems, setShowImportItems] = useState(false);
+  const [showImportSellers, setShowImportSellers] = useState(false);
 
   async function load() {
     const [{ data: it }, { data: fz }, { data: lg }, { data: sl }] = await Promise.all([
@@ -69,6 +72,40 @@ export default function InventoryPage() {
     load();
   }
 
+  async function insertItemsAndFinance(payload) {
+    if (!payload.length) return { message: "沒有可匯入的資料（請確認名稱欄位不是空的）。", error: true };
+    const { data, error } = await supabase.from("inventory_items").insert(payload).select();
+    if (error) {
+      return { message: "新增資材失敗：" + error.message, error: true };
+    }
+    const created = data || [];
+    // 自動把出現過的賣家加入賣家清單，之後可在「依賣家查看」用到
+    const sellerNames = [...new Set(created.map((it) => it.seller).filter(Boolean))];
+    if (sellerNames.length) {
+      await supabase.from("sellers").upsert(
+        sellerNames.map((name) => ({ name })),
+        { onConflict: "name", ignoreDuplicates: true }
+      );
+    }
+    // 有單價與數量的話，直接把這筆採購併入財務總帳的「其他支出」
+    const financeRows = (created || [])
+      .filter((it) => Number(it.qty) > 0 && Number(it.price) > 0)
+      .map((it) => ({
+        type: "expense",
+        amount: Number(it.qty) * Number(it.price),
+        category: "資材採購",
+        note: `${it.name}（${it.qty}${it.unit} × ${formatMoney(it.price)}）`,
+        entry_date: new Date().toISOString().slice(0, 10),
+      }));
+    let financeError = null;
+    if (financeRows.length) {
+      const res = await supabase.from("finance_entries").insert(financeRows);
+      financeError = res.error;
+    }
+    load();
+    return { count: created.length, financeCount: financeRows.length, financeError };
+  }
+
   async function handleAddItem(rows) {
     const payload = rows
       .filter((r) => r.name)
@@ -82,27 +119,46 @@ export default function InventoryPage() {
         rating: r.rating ? Number(r.rating) : null,
         notes: r.notes || null,
       }));
-    if (!payload.length) return;
-    const { data: created, error } = await supabase.from("inventory_items").insert(payload).select();
-    if (error) {
-      alert("新增資材失敗：" + error.message);
-      return;
-    }
-    // 有單價與數量的話，直接把這筆採購併入財務總帳的「其他支出」
-    const financeRows = (created || [])
-      .filter((it) => Number(it.qty) > 0 && Number(it.price) > 0)
-      .map((it) => ({
-        type: "expense",
-        amount: Number(it.qty) * Number(it.price),
-        category: "資材採購",
-        note: `${it.name}（${it.qty}${it.unit} × ${formatMoney(it.price)}）`,
-        entry_date: new Date().toISOString().slice(0, 10),
+    const res = await insertItemsAndFinance(payload);
+    if (res.error) alert(res.message);
+    else if (res.financeError) alert("資材已新增，但自動記帳失敗：" + res.financeError.message);
+  }
+
+  const itemImportColumns = ["name", "category", "qty", "unit", "seller", "price", "rating", "notes"];
+  const itemImportExample = ["培養土", "介質", "10", "kg", "拼多多", "80", "", "介質調配"];
+
+  async function handleImportItems(csvRows) {
+    const payload = csvRows
+      .filter((r) => r.name && r.name.trim())
+      .map((r) => ({
+        name: r.name.trim(),
+        category: r.category?.trim() || null,
+        qty: r.qty ? Number(r.qty) || 0 : 0,
+        unit: r.unit?.trim() || "個",
+        seller: r.seller?.trim() || null,
+        price: r.price ? Number(r.price) || null : null,
+        rating: r.rating ? Number(r.rating) || null : null,
+        notes: r.notes?.trim() || null,
       }));
-    if (financeRows.length) {
-      const { error: financeError } = await supabase.from("finance_entries").insert(financeRows);
-      if (financeError) alert("資材已新增，但自動記帳失敗：" + financeError.message);
-    }
+    const res = await insertItemsAndFinance(payload);
+    if (res.error) return res;
+    let message = `成功匯入 ${res.count} 筆資材`;
+    if (res.financeCount) message += `，其中 ${res.financeCount} 筆有數量與單價，已同步記入財務總帳的「其他支出」`;
+    return { message: message + "。" };
+  }
+
+  const sellerImportColumns = ["name", "notes"];
+  const sellerImportExample = ["南屯花市", "較貴、品種多"];
+
+  async function handleImportSellers(csvRows) {
+    const payload = csvRows
+      .filter((r) => r.name && r.name.trim())
+      .map((r) => ({ name: r.name.trim(), notes: r.notes?.trim() || null }));
+    if (!payload.length) return { message: "沒有可匯入的資料（請確認名稱欄位不是空的）。", error: true };
+    const { error } = await supabase.from("sellers").upsert(payload, { onConflict: "name" });
+    if (error) return { message: "匯入賣家失敗：" + error.message, error: true };
     load();
+    return { message: `成功匯入/更新 ${payload.length} 位賣家。` };
   }
 
   async function handleDeleteItem(item) {
@@ -209,8 +265,14 @@ export default function InventoryPage() {
           <button className="btn-secondary" onClick={() => setShowAddSeller(true)}>
             ＋ 新增賣家
           </button>
+          <button className="btn-secondary" onClick={() => setShowImportSellers(true)}>
+            📥 匯入賣家 CSV
+          </button>
           <button className="btn-secondary" onClick={() => setShowConvert(true)}>
             🔁 換盆規格轉換
+          </button>
+          <button className="btn-secondary" onClick={() => setShowImportItems(true)}>
+            📥 匯入資材 CSV
           </button>
           <button className="btn-primary" onClick={() => setShowAddItem(true)}>
             ＋ 新增資材（表格批次輸入）
@@ -342,6 +404,24 @@ export default function InventoryPage() {
           onSubmit={handleAddSeller}
           onClose={() => setShowAddSeller(false)}
           submitLabel="全部儲存"
+        />
+      )}
+      {showImportItems && (
+        <ImportCsvModal
+          title="匯入資材 CSV"
+          templateColumns={itemImportColumns}
+          exampleRow={itemImportExample}
+          onImport={handleImportItems}
+          onClose={() => setShowImportItems(false)}
+        />
+      )}
+      {showImportSellers && (
+        <ImportCsvModal
+          title="匯入賣家 CSV"
+          templateColumns={sellerImportColumns}
+          exampleRow={sellerImportExample}
+          onImport={handleImportSellers}
+          onClose={() => setShowImportSellers(false)}
         />
       )}
       {showAddFert && (
