@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { speciesLabel, potSizeLabel, waterUrgency } from "@/lib/utils";
+import { ALIVE_STATUSES } from "@/lib/constants";
 
 const urgencyOrder = { overdue: 0, today: 1, ok: 2, done: 3, none: 4 };
 const urgencyColor = {
@@ -22,7 +23,7 @@ export default function CustodyPage() {
     setLoading(true);
     const [{ data: setting }, { data: p }, { data: f }] = await Promise.all([
       supabase.from("app_settings").select("*").eq("key", "custody_mode").maybeSingle(),
-      supabase.from("plants").select("*").eq("status", "alive"),
+      supabase.from("plants").select("*").in("status", ALIVE_STATUSES),
       supabase.from("fields").select("*"),
     ]);
     setEnabled(!!setting?.value?.enabled);

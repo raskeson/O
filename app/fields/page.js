@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { TAIWAN_CITIES } from "@/lib/constants";
+import { TAIWAN_CITIES, ALIVE_STATUSES } from "@/lib/constants";
 import BatchTableForm from "@/components/BatchTableForm";
 import FieldWeather from "@/components/FieldWeather";
 
@@ -13,7 +13,7 @@ export default function FieldsPage() {
   async function load() {
     const [{ data: f }, { data: p }] = await Promise.all([
       supabase.from("fields").select("*").order("created_at"),
-      supabase.from("plants").select("id,name,field_id").eq("status", "alive"),
+      supabase.from("plants").select("id,name,field_id").in("status", ALIVE_STATUSES),
     ]);
     setFields(f || []);
     setPlants(p || []);

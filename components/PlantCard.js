@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { speciesLabel, potSizeLabel, waterUrgency, formatMoney } from "@/lib/utils";
+import { ALIVE_STATUSES } from "@/lib/constants";
 
 const urgencyColor = {
   overdue: "bg-red-100 text-red-700",
@@ -12,10 +13,11 @@ const urgencyColor = {
 
 const statusColor = {
   alive: "bg-leaf-100 text-leaf-800",
+  weak: "bg-amber-100 text-amber-700",
   sold: "bg-blue-100 text-blue-700",
   dead: "bg-gray-200 text-gray-600",
 };
-const statusLabel = { alive: "健在", sold: "已售出", dead: "已死亡" };
+const statusLabel = { alive: "健在", weak: "狀況不佳", sold: "已售出", dead: "已死亡" };
 
 export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell, onDeath, onDelete }) {
   const urgency = waterUrgency(plant);
@@ -44,8 +46,14 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
           </div>
           <div className="text-xs text-gray-500 truncate">{speciesLabel(plant)}</div>
           {plant.category && <div className="text-xs text-gray-500">分類：{plant.category}</div>}
+          {plant.parentage && <div className="text-xs text-gray-500">親本：{plant.parentage}</div>}
           <div className="text-xs text-gray-500">場域：{fieldName || "未設定"}</div>
-          {plant.seller && <div className="text-xs text-gray-500">賣家/來源：{plant.seller}</div>}
+          {plant.seller && (
+            <div className="text-xs text-gray-500">
+              賣家/來源：{plant.seller}
+              {plant.acquisition_type ? `（${plant.acquisition_type}）` : ""}
+            </div>
+          )}
           <div className="text-xs text-gray-500">盆栽：{potSizeLabel(plant)}</div>
           <div className="text-xs text-gray-700 mt-0.5">
             購入 {formatMoney(plant.cost)}　市價 {formatMoney(plant.estimated_value)}
@@ -53,7 +61,7 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
         </div>
       </div>
 
-      {plant.status === "alive" && (
+      {ALIVE_STATUSES.includes(plant.status) && (
         <div className={`text-xs px-2 py-1 rounded-lg w-fit ${urgencyColor[urgency.level]}`}>
           💧 {urgency.label}
           {plant.care_note ? <span className="ml-1 opacity-70">・{plant.care_note}</span> : null}
@@ -76,7 +84,7 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
         <Link href={`/plants/${plant.id}`} className="btn-secondary text-xs px-2 py-1">
           詳情/相簿/血統
         </Link>
-        {plant.status === "alive" && (
+        {ALIVE_STATUSES.includes(plant.status) && (
           <>
             <button onClick={() => onMove(plant)} className="btn-secondary text-xs px-2 py-1">
               🚚 搬家

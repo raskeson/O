@@ -239,6 +239,25 @@ alter table plants add column if not exists seller text;
 
 -- ============================================
 -- 更新：分類欄位（跟「種類」分開，用於品種內的細分類，
--- 例如鹿角蕨的親本分類 willinckii / veitchii 等，自由文字）
+-- 例如鹿角蕨的原種分類 willinckii / veitchii / hybrid 等，自由文字）
 -- ============================================
 alter table plants add column if not exists category text;
+
+-- ============================================
+-- 更新：親本欄位（記錄雜交/血緣組合本身，例如「willinckii × veitchii」，
+-- 純文字描述，跟 mother_id/father_id 這兩個「指向系統內某一株植物」
+-- 的血統欄位不同——親本通常是買入時賣家就標好的、系統外的血緣資訊）
+-- ============================================
+alter table plants add column if not exists parentage text;
+
+-- ============================================
+-- 更新：來源類型欄位（買入 / 分株 / 自撿 / 贈品，自由文字，
+-- 方便之後篩選或統計；跟 seller「賣家名稱」是不同欄位）
+-- ============================================
+alter table plants add column if not exists acquisition_type text;
+
+-- ============================================
+-- 備註：status（狀態）欄位本身是純文字、沒有資料庫層級的限制，
+-- 所以新增「狀況不佳」這個狀態值不需要額外的 SQL，
+-- 只是在程式（lib/constants.js 的 PLANT_STATUS）裡多加一個選項即可。
+-- ============================================

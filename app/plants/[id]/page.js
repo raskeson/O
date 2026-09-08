@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS } from "@/lib/constants";
+import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS, ACQUISITION_TYPES, ALIVE_STATUSES } from "@/lib/constants";
 import { speciesLabel, potSizeLabel, formatMoney, genTagUid, waterUrgency } from "@/lib/utils";
 import PhotoUploader from "@/components/PhotoUploader";
 import BatchTableForm from "@/components/BatchTableForm";
@@ -176,7 +176,15 @@ export default function PlantDetail() {
     { key: "tag_uid", label: "UID（可自行輸入修改）", width: 140 },
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類", width: 140 },
-    { key: "category", label: "分類（選填，如鹿角蕨親本 willinckii）", width: 140 },
+    { key: "category", label: "分類（選填，如鹿角蕨的原種分類 willinckii/veitchii）", width: 140 },
+    { key: "parentage", label: "親本（選填，如雜交組合 willinckii × veitchii）", width: 180 },
+    {
+      key: "acquisition_type",
+      label: "來源類型（選填）",
+      type: "select",
+      options: ACQUISITION_TYPES.map((t) => ({ value: t, label: t })),
+      width: 110,
+    },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
     {
       key: "seller",
@@ -202,6 +210,8 @@ export default function PlantDetail() {
         species: row.species || null,
         custom_species: row.custom_species || null,
         category: row.category || null,
+        parentage: row.parentage || null,
+        acquisition_type: row.acquisition_type || null,
         field_id: row.field_id || null,
         seller: row.seller || null,
         status: row.status || "alive",
@@ -275,14 +285,16 @@ export default function PlantDetail() {
           <Stat label="估計市價" value={formatMoney(plant.estimated_value)} />
           <Stat label="取得日期" value={plant.acquired_date || "-"} />
           <Stat label="分類" value={plant.category || "未設定"} />
+          <Stat label="親本" value={plant.parentage || "未設定"} />
+          <Stat label="來源類型" value={plant.acquisition_type || "未設定"} />
           <Stat label="賣家/來源" value={plant.seller || "未設定"} />
           <Stat label="性質" value={plant.care_note || "未設定"} />
-          {plant.status === "alive" && <Stat label="澆水狀態" value={`💧 ${waterUrgency(plant).label}`} />}
+          {ALIVE_STATUSES.includes(plant.status) && <Stat label="澆水狀態" value={`💧 ${waterUrgency(plant).label}`} />}
           {plant.status === "dead" && <Stat label="死亡原因" value={plant.death_reason || "未填寫"} />}
         </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          {plant.status === "alive" && (
+          {ALIVE_STATUSES.includes(plant.status) && (
             <button className="btn-secondary" onClick={markWatered}>
               💧 記錄已澆水
             </button>
@@ -296,7 +308,7 @@ export default function PlantDetail() {
           <button className="btn-secondary" onClick={() => setShowBreed(true)}>
             🌸 配種／登記血統
           </button>
-          {plant.status === "alive" && (
+          {ALIVE_STATUSES.includes(plant.status) && (
             <button className="btn-danger" onClick={() => setShowDeathForm(true)}>
               🥀 標記死亡
             </button>
@@ -471,6 +483,8 @@ export default function PlantDetail() {
               species: plant.species,
               custom_species: plant.custom_species,
               category: plant.category,
+              parentage: plant.parentage,
+              acquisition_type: plant.acquisition_type,
               field_id: plant.field_id,
               seller: plant.seller,
               status: plant.status,

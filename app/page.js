@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS } from "@/lib/constants";
+import { SPECIES_OPTIONS, POT_UNITS, PLANT_STATUS, ACQUISITION_TYPES, ALIVE_STATUSES } from "@/lib/constants";
 import PlantCard from "@/components/PlantCard";
 import BatchTableForm from "@/components/BatchTableForm";
 import ImportCsvModal from "@/components/ImportCsvModal";
@@ -79,7 +79,7 @@ export default function Dashboard() {
 
   // 今天該澆水（含已逾期）的健在植株
   const dueToWater = useMemo(
-    () => plants.filter((p) => p.status === "alive" && ["overdue", "today"].includes(waterUrgency(p).level)),
+    () => plants.filter((p) => ALIVE_STATUSES.includes(p.status) && ["overdue", "today"].includes(waterUrgency(p).level)),
     [plants]
   );
 
@@ -102,7 +102,7 @@ export default function Dashboard() {
   // 估計市價：所有健在植株的估計市價加總
   // 已實現純利：實際發生的財務紀錄（出售+其他收入 - 購入+其他支出）
   const summary = useMemo(() => {
-    const alive = plants.filter((p) => p.status === "alive");
+    const alive = plants.filter((p) => ALIVE_STATUSES.includes(p.status));
     const totalInvested = alive.reduce((s, p) => s + (Number(p.cost) || 0), 0);
     const totalMarketValue = alive.reduce((s, p) => s + (Number(p.estimated_value) || 0), 0);
     const s = { purchase: 0, sale: 0, expense: 0, income: 0 };
@@ -130,7 +130,15 @@ export default function Dashboard() {
     { key: "tag_uid", label: "UID（選填，可自訂；留空可稍後在詳情頁設定）", width: 140 },
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類(選其他時填)", width: 140 },
-    { key: "category", label: "分類（選填，如鹿角蕨親本 willinckii）", width: 140 },
+    { key: "category", label: "分類（選填，如鹿角蕨的原種分類 willinckii/veitchii）", width: 140 },
+    { key: "parentage", label: "親本（選填，如雜交組合 willinckii × veitchii）", width: 180 },
+    {
+      key: "acquisition_type",
+      label: "來源類型（選填）",
+      type: "select",
+      options: ACQUISITION_TYPES.map((t) => ({ value: t, label: t })),
+      width: 110,
+    },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
     {
       key: "seller",
@@ -181,6 +189,8 @@ export default function Dashboard() {
         species: r.species || null,
         custom_species: r.custom_species || null,
         category: r.category || null,
+        parentage: r.parentage || null,
+        acquisition_type: r.acquisition_type || null,
         field_id: r.field_id || null,
         seller: r.seller || null,
         acquired_date: r.acquired_date || null,
@@ -197,12 +207,12 @@ export default function Dashboard() {
   }
 
   const importColumns = [
-    "name", "tag_uid", "species", "custom_species", "category", "field_name", "seller", "acquired_date",
+    "name", "tag_uid", "species", "custom_species", "category", "parentage", "acquisition_type", "field_name", "seller", "acquired_date",
     "cost", "estimated_value", "pot_diameter", "pot_unit", "water_frequency_days",
     "care_note", "status", "notes",
   ];
   const importExample = [
-    "薄荷", "", "香草類", "", "", "後陽台", "丁（旋轉花市）", "2026-01-15",
+    "薄荷", "", "香草類", "", "", "", "買入", "後陽台", "丁（旋轉花市）", "2026-01-15",
     "60", "80", "5", "吋", "3",
     "喜濕", "alive", "",
   ];
@@ -218,13 +228,15 @@ export default function Dashboard() {
           fieldId = fieldByName.get(r.field_name.trim().toLowerCase()) || null;
           if (!fieldId) unmatchedField += 1;
         }
-        const status = ["alive", "sold", "dead"].includes((r.status || "").trim()) ? r.status.trim() : "alive";
+        const status = ["alive", "weak", "sold", "dead"].includes((r.status || "").trim()) ? r.status.trim() : "alive";
         return {
           name: r.name.trim(),
           tag_uid: r.tag_uid?.trim() || null,
           species: r.species?.trim() || null,
           custom_species: r.custom_species?.trim() || null,
           category: r.category?.trim() || null,
+          parentage: r.parentage?.trim() || null,
+          acquisition_type: r.acquisition_type?.trim() || null,
           field_id: fieldId,
           seller: r.seller?.trim() || null,
           acquired_date: r.acquired_date?.trim() || null,
