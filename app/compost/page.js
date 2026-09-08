@@ -13,10 +13,12 @@ export default function CompostPage() {
   const [materialTarget, setMaterialTarget] = useState(null); // bin to add material to
 
   async function load() {
-    const [{ data: b }, { data: m }] = await Promise.all([
+    const [{ data: b, error: be }, { data: m, error: me }] = await Promise.all([
       supabase.from("compost_bins").select("*").order("created_at", { ascending: false }),
       supabase.from("compost_materials").select("*"),
     ]);
+    if (be) console.error("載入堆肥箱失敗：", be.message);
+    if (me) console.error("載入堆肥材料失敗：", me.message);
     setBins(b || []);
     setMaterials(m || []);
   }
@@ -33,13 +35,21 @@ export default function CompostPage() {
   async function handleAddBin(rows) {
     const payload = rows.filter((r) => r.name).map((r) => ({ name: r.name, started_at: r.started_at || new Date().toISOString().slice(0, 10), notes: r.notes || null }));
     if (!payload.length) return;
-    await supabase.from("compost_bins").insert(payload);
+    const { error } = await supabase.from("compost_bins").insert(payload);
+    if (error) {
+      alert("新增堆肥箱失敗：" + error.message);
+      return;
+    }
     load();
   }
 
   async function handleDeleteBin(bin) {
     if (!confirm(`確定刪除堆肥箱「${bin.name}」？`)) return;
-    await supabase.from("compost_bins").delete().eq("id", bin.id);
+    const { error } = await supabase.from("compost_bins").delete().eq("id", bin.id);
+    if (error) {
+      alert("刪除失敗：" + error.message);
+      return;
+    }
     load();
   }
 
@@ -84,14 +94,25 @@ export default function CompostPage() {
         };
       })
       .filter((p) => p.cn_ratio > 0);
-    if (!payload.length) return;
-    await supabase.from("compost_materials").insert(payload);
+    if (!payload.length) {
+      alert("沒有可新增的材料：請確認重量與碳氮比都有填。");
+      return;
+    }
+    const { error } = await supabase.from("compost_materials").insert(payload);
+    if (error) {
+      alert("新增材料失敗：" + error.message + "\n\n如果訊息提到 cn_ratio 找不到欄位，代表資料庫還沒更新，請到 Supabase 執行 schema.sql 裡「既有資料庫要升級」的那幾行 SQL。");
+      return;
+    }
     setMaterialTarget(null);
     load();
   }
 
   async function handleDeleteMaterial(m) {
-    await supabase.from("compost_materials").delete().eq("id", m.id);
+    const { error } = await supabase.from("compost_materials").delete().eq("id", m.id);
+    if (error) {
+      alert("刪除失敗：" + error.message);
+      return;
+    }
     load();
   }
 
