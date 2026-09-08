@@ -236,3 +236,9 @@ alter table plants add column if not exists death_reason text;
 -- 新增/匯入植物時若出現新的賣家名稱，會自動加進 sellers 清單）
 -- ============================================
 alter table plants add column if not exists seller text;
+
+-- ============================================
+-- 更新：分類欄位（跟「種類」分開，用於品種內的細分類，
+-- 例如鹿角蕨的親本分類 willinckii / veitchii 等，自由文字）
+-- ============================================
+alter table plants add column if not exists category text;

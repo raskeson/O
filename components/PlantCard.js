@@ -43,6 +43,7 @@ export default function PlantCard({ plant, fieldName, coverPhoto, onMove, onSell
             )}
           </div>
           <div className="text-xs text-gray-500 truncate">{speciesLabel(plant)}</div>
+          {plant.category && <div className="text-xs text-gray-500">分類：{plant.category}</div>}
           <div className="text-xs text-gray-500">場域：{fieldName || "未設定"}</div>
           {plant.seller && <div className="text-xs text-gray-500">賣家/來源：{plant.seller}</div>}
           <div className="text-xs text-gray-500">盆栽：{potSizeLabel(plant)}</div>

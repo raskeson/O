@@ -176,6 +176,7 @@ export default function PlantDetail() {
     { key: "tag_uid", label: "UID（可自行輸入修改）", width: 140 },
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類", width: 140 },
+    { key: "category", label: "分類（選填，如鹿角蕨親本 willinckii）", width: 140 },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
     {
       key: "seller",
@@ -200,6 +201,7 @@ export default function PlantDetail() {
         tag_uid: row.tag_uid || null,
         species: row.species || null,
         custom_species: row.custom_species || null,
+        category: row.category || null,
         field_id: row.field_id || null,
         seller: row.seller || null,
         status: row.status || "alive",
@@ -272,6 +274,7 @@ export default function PlantDetail() {
           <Stat label="購入成本" value={formatMoney(plant.cost)} />
           <Stat label="估計市價" value={formatMoney(plant.estimated_value)} />
           <Stat label="取得日期" value={plant.acquired_date || "-"} />
+          <Stat label="分類" value={plant.category || "未設定"} />
           <Stat label="賣家/來源" value={plant.seller || "未設定"} />
           <Stat label="性質" value={plant.care_note || "未設定"} />
           {plant.status === "alive" && <Stat label="澆水狀態" value={`💧 ${waterUrgency(plant).label}`} />}
@@ -467,6 +470,7 @@ export default function PlantDetail() {
               tag_uid: plant.tag_uid,
               species: plant.species,
               custom_species: plant.custom_species,
+              category: plant.category,
               field_id: plant.field_id,
               seller: plant.seller,
               status: plant.status,

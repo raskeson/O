@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [sellTarget, setSellTarget] = useState(null);
   const [filterField, setFilterField] = useState("");
   const [filterSpecies, setFilterSpecies] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
   const [filterStatus, setFilterStatus] = useState("alive");
   const [sellerFilter, setSellerFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -70,6 +71,12 @@ export default function Dashboard() {
     return [...set].sort((a, b) => a.localeCompare(b, "zh-Hant"));
   }, [plants]);
 
+  // 分類選單：跟「種類」分開的細分類欄位（例如鹿角蕨的親本分類 willinckii/veitchii）
+  const categoryList = useMemo(() => {
+    const set = new Set(plants.map((p) => p.category).filter(Boolean));
+    return [...set].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+  }, [plants]);
+
   // 今天該澆水（含已逾期）的健在植株
   const dueToWater = useMemo(
     () => plants.filter((p) => p.status === "alive" && ["overdue", "today"].includes(waterUrgency(p).level)),
@@ -107,6 +114,7 @@ export default function Dashboard() {
   const filtered = plants.filter((p) => {
     if (filterField && p.field_id !== filterField) return false;
     if (filterSpecies && speciesLabel(p) !== filterSpecies) return false;
+    if (filterCategory && p.category !== filterCategory) return false;
     if (filterStatus && p.status !== filterStatus) return false;
     if (sellerFilter && p.seller !== sellerFilter) return false;
     if (search.trim()) {
@@ -122,6 +130,7 @@ export default function Dashboard() {
     { key: "tag_uid", label: "UID（選填，可自訂；留空可稍後在詳情頁設定）", width: 140 },
     { key: "species", label: "種類", type: "select", options: SPECIES_OPTIONS.map((s) => ({ value: s, label: s })), width: 160 },
     { key: "custom_species", label: "自訂種類(選其他時填)", width: 140 },
+    { key: "category", label: "分類（選填，如鹿角蕨親本 willinckii）", width: 140 },
     { key: "field_id", label: "場域", type: "select", options: fields.map((f) => ({ value: f.id, label: f.name })), width: 140 },
     {
       key: "seller",
@@ -171,6 +180,7 @@ export default function Dashboard() {
         tag_uid: r.tag_uid || null,
         species: r.species || null,
         custom_species: r.custom_species || null,
+        category: r.category || null,
         field_id: r.field_id || null,
         seller: r.seller || null,
         acquired_date: r.acquired_date || null,
@@ -187,12 +197,12 @@ export default function Dashboard() {
   }
 
   const importColumns = [
-    "name", "tag_uid", "species", "custom_species", "field_name", "seller", "acquired_date",
+    "name", "tag_uid", "species", "custom_species", "category", "field_name", "seller", "acquired_date",
     "cost", "estimated_value", "pot_diameter", "pot_unit", "water_frequency_days",
     "care_note", "status", "notes",
   ];
   const importExample = [
-    "薄荷", "", "香草類", "", "後陽台", "丁（旋轉花市）", "2026-01-15",
+    "薄荷", "", "香草類", "", "", "後陽台", "丁（旋轉花市）", "2026-01-15",
     "60", "80", "5", "吋", "3",
     "喜濕", "alive", "",
   ];
@@ -214,6 +224,7 @@ export default function Dashboard() {
           tag_uid: r.tag_uid?.trim() || null,
           species: r.species?.trim() || null,
           custom_species: r.custom_species?.trim() || null,
+          category: r.category?.trim() || null,
           field_id: fieldId,
           seller: r.seller?.trim() || null,
           acquired_date: r.acquired_date?.trim() || null,
@@ -390,6 +401,14 @@ export default function Dashboard() {
           {speciesList.map((s) => (
             <option key={s} value={s}>
               {s}
+            </option>
+          ))}
+        </select>
+        <select className="input w-36" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+          <option value="">所有分類</option>
+          {categoryList.map((c) => (
+            <option key={c} value={c}>
+              {c}
             </option>
           ))}
         </select>
